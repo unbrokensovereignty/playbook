@@ -1,0 +1,178 @@
+/* Pieces used by particular pages: settings, themes, help and the gallery. */
+
+.mr-auto { margin-right: auto; }
+.inline-icon { display: inline-block; vertical-align: -3px; }
+.banners { display: grid; }
+.tab-body { margin-top: 20px; animation: fade-in var(--dur-base) var(--ease) both; }
+
+/* ---------------------------------------------------------------- settings */
+
+.settings-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: start; }
+.settings-nav { position: sticky; top: 0; display: grid; gap: 2px; padding-top: 4px; }
+.settings-nav button, .settings-nav a {
+  display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--text2); font-weight: 600; text-align: left; text-decoration: none; cursor: pointer;
+  transition: background-color var(--dur-quick), color var(--dur-quick);
+}
+.settings-nav button:hover, .settings-nav a:hover { background: var(--surface-2); color: var(--text); }
+/* with little room the sections' links go in a row above them, so the settings keep the full width */
+@container page (max-width: 800px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .settings-nav { position: static; display: flex; flex-wrap: wrap; gap: 4px; padding-top: 0; }
+}
+.settings-advanced { margin-top: 12px; padding: 12px; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.settings-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.settings-section { scroll-margin-top: 24px; }
+.settings-section > h2 { margin-bottom: 2px; }
+.settings-section > p.muted { margin-bottom: 8px; font-size: 0.93rem; }
+
+/* With little room (a small window, large text) the control drops below its words instead of squeezing them or itself. */
+/* Settings' "Only “set name”": a long name is cut short (it's in full as the button's tooltip) */
+.scope-switch { min-width: 0; flex-wrap: nowrap; }
+.scope-switch button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.scope-switch button:first-child { flex: none; }
+.setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; min-height: 60px; padding: 12px 0; border-top: 1px solid var(--line); scroll-margin-top: 80px; }
+.setting-text { flex: 1 1 9em; min-width: 0; display: grid; gap: 2px; }
+.setting-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 650; }
+.setting-help { color: var(--text2); font-size: 0.88rem; }
+/* Controls that don't fit side by side (two buttons with very large text) wrap rather than push the page wider. */
+.setting-control { flex: 0 1 auto; margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
+.setting-control .row { flex-wrap: wrap; justify-content: flex-end; }
+.setting-control .select { width: auto; min-width: 10em; max-width: 100%; }
+.comfort-list { gap: 8px; }
+.setting-control .comfort-row { flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.comfort-name { min-width: 6em; }
+.flash .setting-row { animation: flash 1.5s var(--ease) both; border-radius: var(--r); }
+@keyframes flash { 0%, 40% { background: var(--accent-soft); box-shadow: 0 0 0 8px var(--accent-soft); } 100% { background: transparent; box-shadow: 0 0 0 8px transparent; } }
+
+.weekdays button { width: 36px; padding: 0; }
+
+.key-capture {
+  min-width: 90px; height: 36px; padding: 0 12px; border: 1px dashed var(--line-strong); border-radius: var(--r);
+  background: var(--surface); cursor: pointer; font-weight: 600; color: var(--text2); transition: border-color var(--dur-quick), background-color var(--dur-quick);
+}
+.key-capture:hover { border-color: var(--accent); }
+.key-capture.listening { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); animation: pulse 1s ease-in-out infinite; }
+
+/* ---------------------------------------------------------------- themes */
+
+.theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.theme-tile { position: relative; }
+.theme-pick {
+  display: grid; gap: 10px; width: 100%; padding: 8px 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); cursor: pointer; text-align: left; transition: border-color var(--dur-quick), transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick);
+}
+.theme-pick:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.theme-pick:active { transform: scale(0.98); }
+.theme-tile.current .theme-pick { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.theme-name { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-weight: 650; }
+.theme-name .icon { color: var(--accent-text); }
+.theme-more { position: absolute; top: 14px; right: 14px; background: color-mix(in oklab, var(--surface) 85%, transparent); opacity: 0; transition: opacity var(--dur-quick); }
+.theme-tile:hover .theme-more, .theme-more:focus-visible { opacity: 1; }
+
+.theme-preview {
+  display: grid; grid-template-columns: 22% 1fr; height: 108px; border-radius: var(--r); overflow: hidden;
+  background: linear-gradient(160deg, var(--bg), var(--bg2)); border: 1px solid var(--line); color: var(--text);
+}
+.theme-preview.big { height: 220px; grid-template-columns: 20% 1fr; }
+.tp-side { display: grid; align-content: start; gap: 6px; padding: 10px 8px; background: var(--surface); border-right: 1px solid var(--line); }
+.tp-side i { height: 6px; border-radius: 3px; background: var(--line-strong); }
+.tp-side i.on { background: var(--accent); }
+.tp-main { display: grid; align-content: center; justify-items: center; gap: 8px; padding: 8px; }
+.tp-card { display: grid; justify-items: center; width: 78%; padding: 10px 6px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow-2); border: 1px solid var(--line); }
+.tp-card b { color: var(--card-text); font-size: 0.9rem; font-weight: 600; }
+.tp-card span { color: var(--text2); font-size: 0.7rem; }
+.big .tp-card { padding: 22px 10px; }
+.big .tp-card b { font-size: 1.3rem; }
+.big .tp-card span { font-size: 0.9rem; }
+.tp-row { display: flex; gap: 5px; }
+.tp-btn { width: 22px; height: 9px; border-radius: 3px; }
+.big .tp-btn { width: 48px; height: 18px; border-radius: 6px; }
+.tp-btn.s { background: var(--tier-s); } .tp-btn.a { background: var(--tier-a); } .tp-btn.b { background: var(--tier-b); } .tp-btn.c { background: var(--tier-c); }
+
+.theme-editor { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; color: var(--text); }
+.color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.color-grid .color-field .input { width: 6.4em; }
+.color-grid .toggle { font-weight: 650; font-size: 0.92rem; }
+.dialog-icon { color: var(--accent-text); margin-top: 3px; }
+
+/* ---------------------------------------------------------------- help */
+
+.guide h2 { margin-bottom: 10px; }
+.guide-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+@media (max-width: 1000px) { .guide-cols { grid-template-columns: minmax(0, 1fr); } }
+.guide ol { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
+.guide p { margin: 0; }
+.key-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.key-table td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: middle; }
+.key-table td:first-child { width: 42%; }
+/* the labels keep to one line, and a long value (the releases address) wraps inside its card */
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.facts dt { color: var(--text2); font-weight: 600; }
+.facts dd { margin: 0; overflow-wrap: anywhere; }
+.buy-guide, .sources { display: grid; gap: 8px; margin: 0; }
+.buy-guide dt, .sources dt { display: inline; font-weight: 700; }
+.buy-guide dt::after, .sources dt::after { content: '. '; }
+.buy-guide dd, .sources dd { display: inline; margin: 0; color: var(--text2); }
+.error-log { max-height: 220px; overflow: auto; margin: 0; padding: 10px; border-radius: var(--r); background: var(--surface-2); font: 0.8rem/1.45 var(--font-mono); white-space: pre-wrap; }
+.licenses { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+
+/* ---------------------------------------------------------------- gallery */
+
+.icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.icon-grid span { display: grid; justify-items: center; gap: 4px; padding: 10px 4px; border-radius: var(--r); color: var(--text2); }
+.icon-grid span:hover { background: var(--surface-2); color: var(--text); }
+.icon-grid small { font-size: 0.7rem; color: var(--text3); }
+
+/* ---------------------------------------------------------------- lists */
+
+.link { border: 0; padding: 0; background: none; color: var(--accent-text); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.link:hover { text-decoration-thickness: 2px; }
+.link:active { opacity: 0.7; }
+.warn-text { color: var(--warn-text); font-weight: 600; }
+.danger-text { color: var(--bad-text); }
+.list-tools { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+/* the search keeps a usable width; the menus wrap below it when there isn't room */
+.list-tools .search-input { flex: 1 1 220px; min-width: 0; }
+.list-tools .select { width: auto; flex: 0 1 auto; max-width: 210px; min-width: 120px; }
+.row-star { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text3); cursor: pointer; opacity: 0.45; transition: opacity var(--dur-quick), transform var(--dur-quick); }
+.row-star:focus-visible, .row-star.on { opacity: 1; }
+.row-star:hover { background: var(--surface-3); }
+.row-star:active { transform: scale(0.88); }
+.list-empty { padding: 28px; text-align: center; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.mini-table td { padding: 6px 8px; border-top: 1px solid var(--line); }
+.mini-table td:last-child { color: var(--text2); }
+.problems summary { cursor: pointer; font-weight: 600; color: var(--warn-text); }
+.problems ul { margin: 6px 0 0; padding-left: 1.2em; font-size: 0.85rem; display: grid; gap: 3px; }
+/* over a dialog, messages move to the top so they never cover its buttons */
+body:has(.scrim) .toasts { top: 20px; bottom: auto; }
+
+/* ---------------------------------------------------------------- agent select */
+.select-page { align-items: start; }
+.select-where .select { min-width: 150px; }
+.select-slots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.select-slot { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 6px 6px 6px 7px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; }
+.select-slot.empty { justify-content: center; background: none; border-style: dashed; font-weight: 400; }
+.select-grid { display: grid; gap: 10px; }
+.select-role { display: grid; gap: 4px; }
+.select-role-name { display: inline-flex; align-items: center; gap: 6px; }
+.select-faces { gap: 6px; }
+.select-face { padding: 2px; border: 2px solid transparent; border-radius: var(--r-sm); background: none; cursor: pointer; line-height: 0; }
+.select-face:hover:not(:disabled) { border-color: var(--line); }
+.select-face.on { border-color: var(--accent); background: var(--accent-soft); }
+.select-face:disabled { opacity: 0.35; cursor: default; }
+.select-pick-head { align-items: center; gap: 14px; }
+.select-pick-name { font-size: 1.7rem; margin: 0; }
+.select-others { display: grid; gap: 6px; }
+.select-others li { gap: 10px; }
+
+/* ---------------------------------------------------------------- your games */
+.record-list, .game-list { display: grid; gap: 8px; }
+.record-list li, .game-row { gap: 10px; }
+.record-name { min-width: 90px; font-weight: 600; }
+.game-row { padding-top: 8px; border-top: 1px solid var(--line); }
+.game-row:first-child { padding-top: 0; border-top: 0; }
+.game-what { min-width: 170px; font-weight: 600; }
+.game-offer { gap: 12px; align-items: center; }
+.game-offer p { margin: 0; }

@@ -1,0 +1,142 @@
+/* Base: sizes, type, motion and the page itself. Colors come from the theme (see ui/theme.ts). */
+
+:root {
+  --font-ui: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Literata Variable', 'Literata', Georgia, 'Times New Roman', serif;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --r-xs: 4px;
+  --r-sm: 7px;
+  --r: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-full: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  --dur-quick: 120ms;
+  --dur-base: 220ms;
+  --dur-page: 320ms;
+  --dur-flip: 450ms;
+  --dur-party: 1200ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.45, 0.55, 1);
+
+  --shadow-1: 0 1px 2px var(--shadow);
+  --shadow-2: 0 2px 6px var(--shadow), 0 1px 2px var(--shadow);
+  --shadow-3: 0 10px 30px var(--shadow), 0 2px 6px var(--shadow);
+
+  --sidebar: 248px;
+  --content: 1240px;
+}
+
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+html[data-text='s'] { font-size: 15px; }
+html[data-text='l'] { font-size: 17.5px; }
+html[data-text='xl'] { font-size: 19px; }
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; height: 100%; }
+
+body {
+  min-width: 760px; /* built for laptops and desktops */
+  background: linear-gradient(160deg, var(--bg) 0%, var(--bg2) 100%) fixed;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+  /* a name with no spaces (a file name, say) breaks rather than running off the page */
+  overflow-wrap: break-word;
+}
+
+#app { height: 100%; }
+#boot[hidden] { display: none; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 650; line-height: 1.2; letter-spacing: -0.01em; }
+h1 { font-family: var(--font-serif); font-size: 1.85rem; font-weight: 600; letter-spacing: -0.015em; }
+h2 { font-family: var(--font-serif); font-size: 1.3rem; font-weight: 600; }
+h3 { font-size: 1.02rem; }
+p { margin: 0; }
+a { color: var(--accent-text); text-underline-offset: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img, svg { display: block; }
+::selection { background: var(--accent-soft); color: var(--text); }
+
+:focus { outline: none; }
+:focus-visible { outline: 2.5px solid var(--focus); outline-offset: 2px; border-radius: var(--r-sm); }
+
+/* quiet scrollbars */
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.muted { color: var(--text2); }
+.faint { color: var(--text3); }
+.center { text-align: center; }
+.small { font-size: 0.875rem; }
+.serif { font-family: var(--font-serif); }
+.num { font-variant-numeric: tabular-nums; }
+.nowrap { white-space: nowrap; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.row { display: flex; align-items: center; gap: var(--sp-2); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.row.wrap, .row-between.wrap { flex-wrap: wrap; }
+/* places a name sits in a flex or grid row, which would otherwise keep a long word whole */
+.page-head .titles > *, .dialog-head h2, .toast > span { min-width: 0; overflow-wrap: anywhere; }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.spacer { flex: 1; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.clamp-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[dir='rtl'] { unicode-bidi: plaintext; }
+
+/* ---------------------------------------------------------------- motion settings */
+
+html[data-motion='reduced'] *, html[data-motion='reduced'] *::before, html[data-motion='reduced'] *::after {
+  /* reduced: fades only */
+  animation-name: fade-only !important;
+  /* each one fades in once and quickly: a slow or looping one would otherwise flash on every loop */
+  animation-duration: 240ms !important;
+  animation-iteration-count: 1 !important;
+  transition-property: opacity, background-color, border-color, color !important;
+}
+html[data-motion='off'] *, html[data-motion='off'] *::before, html[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@keyframes fade-only { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* pop-in and pulse grow with `scale`, so they leave an element's own transform alone (a lifted or pressed tile) */
+@keyframes pop-in { 0% { opacity: 0; scale: 0.92; } 100% { opacity: 1; scale: none; } }
+@keyframes page-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@keyframes page-in-back { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0% { scale: 1; } 40% { scale: 1.08; } 100% { scale: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------------------------------------------------------------- printing */
+
+/* A printed sheet (ui/files.ts) is the only thing on the paper; the page itself never prints. */
+#print-sheet { display: none; }
+@page { margin: 12mm; }
+@media print {
+  html.printing, html.printing body { height: auto; min-width: 0; overflow: visible; background: #FFFFFF; }
+  html.printing body > :not(#print-sheet) { display: none !important; }
+  html.printing #print-sheet { display: block; }
+}

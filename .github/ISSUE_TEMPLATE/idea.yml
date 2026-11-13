@@ -1,0 +1,16 @@
+name: An idea
+description: Something Playbook could do, or do better, including advice you think is off.
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What you'd like Playbook to do, and the situation where it would help.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: For advice you think is off, what you'd pick instead and why (a pro match, a guide or your own games all help).

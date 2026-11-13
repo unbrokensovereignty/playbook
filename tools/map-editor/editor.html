@@ -1,0 +1,1252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playbook map editor</title>
+<!-- Made by tools/map-editor.mjs from the app's own data: change this template, not a built file. -->
+<style>
+@font-face {
+  font-family: 'Atkinson Hyperlegible Next';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(data:font/woff2;base64,/*FONT*/) format('woff2');
+}
+:root {
+  color-scheme: light;
+  --font: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --bg: #F4F6F8;
+  --surface: #FFFFFF;
+  --surface-2: #EDF0F3;
+  --text: #161A1F;
+  --muted: #55606C;
+  --line: #DCE1E6;
+  --line-strong: #BFC7CF;
+  --accent: #C23447;
+  --accent-soft: #FBE6E9;
+  --accent-ink: #FFFFFF;
+  --warn: #9A4A06;
+  --warn-soft: #FDF0E2;
+  --ok: #1D7046;
+  --shadow: rgba(15, 20, 25, 0.14);
+  --frame: #15191E;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0E1115;
+    --surface: #161A20;
+    --surface-2: #1F252D;
+    --text: #E8ECF0;
+    --muted: #9AA5B1;
+    --line: #29313A;
+    --line-strong: #3B4550;
+    --accent: #FF6B7D;
+    --accent-soft: #3A1C22;
+    --accent-ink: #1A0A0D;
+    --warn: #F2A65E;
+    --warn-soft: #33240F;
+    --ok: #62CF94;
+    --shadow: rgba(0, 0, 0, 0.45);
+    --frame: #15191E;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0E1115;
+  --surface: #161A20;
+  --surface-2: #1F252D;
+  --text: #E8ECF0;
+  --muted: #9AA5B1;
+  --line: #29313A;
+  --line-strong: #3B4550;
+  --accent: #FF6B7D;
+  --accent-soft: #3A1C22;
+  --accent-ink: #1A0A0D;
+  --warn: #F2A65E;
+  --warn-soft: #33240F;
+  --ok: #62CF94;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --frame: #15191E;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 15px/1.45 var(--font); min-width: 760px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
+.btn.primary:hover:not(:disabled) { background: color-mix(in oklab, var(--accent) 88%, var(--text)); }
+.btn.small { height: 28px; padding: 0 10px; font-size: 13.5px; }
+.btn.danger { color: var(--accent); }
+.btn svg { width: 16px; height: 16px; flex: none; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+.top { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.brand { display: grid; line-height: 1.2; margin-right: auto; white-space: nowrap; }
+.brand b { font-size: 16.5px; font-weight: 750; }
+.brand span { color: var(--muted); font-size: 13px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.layout { display: grid; grid-template-columns: 184px minmax(0, 1fr) 320px; min-height: 0; }
+.maps { border-right: 1px solid var(--line); overflow: auto; padding: 10px 8px; display: grid; align-content: start; gap: 2px; }
+.maps h2, .side h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 6px 8px 6px; font-weight: 700; }
+.map-btn { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; border: 0; background: none; cursor: pointer; }
+.map-btn:hover { background: var(--surface-2); }
+.map-btn[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.map-btn .name { flex: 1; }
+.badge { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; }
+
+.center { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; padding: 10px 16px 8px; gap: 8px; }
+.tools { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.group { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.group.show { gap: 6px 14px; }
+.group-label { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+.tool { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.tool:hover { background: var(--surface-2); }
+.tool[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+.swatch { width: 18px; height: 18px; flex: none; border-radius: 4px; background: var(--frame); }
+.check { display: inline-flex; align-items: center; gap: 5px; font-size: 13.5px; cursor: pointer; user-select: none; }
+.check input { accent-color: var(--accent); margin: 0; }
+select.small { height: 30px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); padding: 0 6px; font-size: 13.5px; }
+
+.stage-box { position: relative; min-height: 0; display: grid; place-items: center; }
+.stage { position: relative; height: 100%; max-width: 100%; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--frame); box-shadow: 0 2px 10px var(--shadow); touch-action: none; }
+.stage svg { display: block; width: 100%; height: 100%; user-select: none; }
+.stage svg:focus-visible { outline: none; }
+.stage-box:has(svg:focus-visible) .stage { outline: 2px solid var(--accent); outline-offset: 3px; }
+.stage.adding svg { cursor: crosshair; }
+.stage.panning svg { cursor: grabbing; }
+.stage .hit { cursor: grab; }
+.stage.dragging, .stage.dragging * { cursor: grabbing !important; }
+.zoom { position: absolute; top: 10px; right: 10px; display: grid; gap: 4px; }
+.zoom button { width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgba(244, 246, 248, 0.2); background: rgba(21, 25, 30, 0.84); color: #F4F6F8; cursor: pointer; display: grid; place-items: center; font-size: 18px; line-height: 1; }
+.zoom button:hover:not(:disabled) { background: rgba(44, 50, 58, 0.95); }
+.zoom button:disabled { opacity: 0.4; cursor: default; }
+.zoom svg { width: 16px; height: 16px; }
+.status { display: flex; gap: 16px; justify-content: space-between; font-size: 13px; color: var(--muted); min-height: 20px; }
+.status .where { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.side { border-left: 1px solid var(--line); overflow: auto; padding: 12px 14px 20px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px; background: var(--surface); }
+.side > *, .card > * { min-width: 0; }
+.card { border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; background: var(--bg); }
+.card .title { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.empty { color: var(--muted); font-size: 14px; }
+.field { display: grid; gap: 4px; }
+.field > span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); padding: 6px 9px; }
+.field textarea { resize: vertical; min-height: 64px; }
+.xy { display: grid; grid-template-columns: auto 1fr 1fr; gap: 6px; align-items: center; }
+.xy span { font-size: 12.5px; color: var(--muted); font-weight: 600; min-width: 70px; }
+.xy.turn { grid-template-columns: auto auto 1fr auto; }
+.xy input { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); padding: 4px 8px; font-variant-numeric: tabular-nums; }
+.note { font-size: 13.5px; padding: 8px 10px; border-radius: 8px; display: grid; gap: 6px; justify-items: start; }
+.note.warn { background: var(--warn-soft); color: var(--warn); }
+.note.ok { color: var(--ok); padding: 0; }
+.note.info { background: var(--surface-2); color: var(--muted); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.list-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.filter { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); padding: 6px 9px; }
+.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 5px 8px; border-radius: 7px; border: 0; background: none; cursor: pointer; font-size: 14px; }
+.item:hover { background: var(--surface-2); }
+.item[aria-current="true"] { background: var(--accent-soft); }
+.item .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag { font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.new { background: var(--accent-soft); color: var(--accent); }
+.mini { width: 16px; height: 16px; flex: none; }
+.dotmark { width: 9px; height: 9px; border-radius: 50%; background: var(--text); flex: none; margin: 0 3.5px; }
+
+dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); padding: 0; width: min(620px, calc(100vw - 32px)); box-shadow: 0 16px 48px var(--shadow); }
+dialog::backdrop { background: rgba(8, 10, 14, 0.5); }
+.dlg { display: grid; gap: 14px; padding: 20px 22px; max-height: min(80vh, 760px); overflow: auto; }
+.dlg h2 { margin: 0; font-size: 19px; }
+.dlg h3 { margin: 6px 0 0; font-size: 15px; }
+.dlg ul { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
+.dlg p { margin: 0; }
+.dlg .foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
+.dlg kbd { font: 600 12.5px var(--font); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--surface-2); }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 10px; font-size: 14px; box-shadow: 0 6px 20px var(--shadow); opacity: 0; pointer-events: none; transition: opacity 160ms; max-width: min(640px, calc(100vw - 32px)); }
+.toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+@media (max-width: 1180px) {
+  .top { gap: 10px; padding: 8px 12px; }
+  .actions { gap: 6px; }
+  .actions .btn { padding: 0 9px; }
+  .actions .btn svg { display: none; }
+  .layout { grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto 1fr; }
+  .maps { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--line); display: flex; overflow-x: auto; padding: 6px 10px; gap: 4px; }
+  .maps h2 { display: none; }
+  .map-btn { width: auto; white-space: nowrap; }
+}
+
+/* the marks on the map, as in the app */
+.f-orb { --f: #F2C14E; }
+.f-door { --f: #6FC3FF; }
+.f-breakable { --f: #FF9F43; }
+.f-wall { --f: #F48FB1; }
+.f-drop { --f: #80DEEA; }
+.f-teleporter { --f: #C792EA; }
+.f-rope, .f-zipline { --f: #8BE28B; }
+.f-plant, .f-safeplant { --f: #FF6B74; }
+.mark { fill: var(--f); stroke: rgba(10, 12, 16, 0.9); }
+.mark.open { fill: none; stroke: var(--f); stroke-linecap: round; stroke-linejoin: round; }
+.mark.ring { fill: color-mix(in srgb, var(--f) 30%, transparent); stroke: var(--f); }
+.link { stroke: var(--f); stroke-dasharray: 1 0.8; opacity: 0.85; fill: none; }
+.link.faint { opacity: 0.45; stroke-dasharray: 0.4 0.8; }
+.dot { fill: #F4F6F8; stroke: rgba(10, 12, 16, 0.85); }
+.lbl { font-family: var(--font); font-weight: 600; fill: #F4F6F8; paint-order: stroke; stroke: rgba(10, 12, 16, 0.85); stroke-linejoin: round; cursor: grab; }
+.lbl.sel { fill: #FFC2CA; }
+.sel-ring { fill: none; stroke: #FF4655; }
+.wall-ring { fill: none; stroke: #FFB020; }
+.ghost { fill: none; stroke: rgba(244, 246, 248, 0.7); }
+.ghost-line { stroke: rgba(244, 246, 248, 0.55); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>Playbook map editor</b><span id="made"></span></div>
+    <div class="actions">
+      <button class="btn" id="undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Undo</button>
+      <button class="btn" id="redo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>Redo</button>
+      <button class="btn" id="open">Open edits file…</button>
+      <input type="file" id="file" accept=".json,application/json" hidden>
+      <button class="btn" id="png">Save picture</button>
+      <button class="btn primary" id="export">Save edits file</button>
+      <button class="btn" id="theme" title="Theme"></button>
+      <button class="btn" id="help">Help</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav class="maps" aria-label="Maps"><h2>Maps</h2><div id="maps" style="display: contents"></div></nav>
+    <section class="center" aria-label="Map">
+      <div class="tools">
+        <div class="group" role="group" aria-label="Tool" id="tools"></div>
+        <div class="group show" role="group" aria-label="Show">
+          <label class="check"><input type="checkbox" id="v-names">Names</label>
+          <label class="check"><input type="checkbox" id="v-dots">Dots</label>
+          <label class="check"><input type="checkbox" id="v-marks">Marks</label>
+          <label class="check"><input type="checkbox" id="v-floor">Floor</label>
+          <label class="check"><input type="checkbox" id="v-ghosts">Where they were</label>
+          <label class="check">Name size <select class="small" id="v-text"></select></label>
+        </div>
+      </div>
+      <div class="stage-box">
+        <div class="stage" id="stage">
+          <svg id="svg" role="application" tabindex="0" aria-label="Minimap. Drag a dot, name or mark to move it; arrow keys nudge what's selected; plus and minus zoom.">
+            <rect x="-60" y="-60" width="220" height="220" fill="#15191E"></rect>
+            <image id="art" x="0" y="0" width="100" height="100" preserveAspectRatio="none" opacity="0.92"></image>
+            <image id="floor" x="0" y="0" width="100" height="100" preserveAspectRatio="none" style="image-rendering: pixelated"></image>
+            <g id="marks"></g>
+          </svg>
+          <div class="zoom">
+            <button id="zin" title="Zoom in (+)" aria-label="Zoom in">+</button>
+            <button id="zout" title="Zoom out (−)" aria-label="Zoom out">−</button>
+            <button id="zfit" title="Show the whole map (0)" aria-label="Show the whole map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="status"><span id="hint"></span><span class="where" id="where"></span></div>
+    </section>
+    <aside class="side" aria-label="Details">
+      <div id="inspector"></div>
+      <div class="card" id="listCard"></div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="exportDlg"><div class="dlg" id="exportBody"></div></dialog>
+<dialog id="helpDlg"><div class="dlg">
+  <h2>How it works</h2>
+  <ul>
+    <li><b>Move</b> a callout or mark by dragging its dot, its name or the mark itself. Click one to select it, then nudge it with the arrow keys (hold <kbd>Shift</kbd> for bigger steps) or type its place on the right.</li>
+    <li><b>Add</b> a callout or a mark: pick it in the tools (or press its key), then click the map. Name it or describe it on the right. Teleporters and ziplines get two ends; a rope can have a second end too.</li>
+    <li><b>Plant spots</b>: each site has a default plant (a filled hexagon) and a safe plant (a hollow one), both inside the area the map tints for planting. Put the default where a team usually plants once the site is taken, and the safe plant just inside the way most teams come on, and say which way that is in its description.</li>
+    <li><b>Turn</b> a mark (a door or wall that lies at a slant, say) with <kbd>[</kbd> and <kbd>]</kbd>, 15° a press (hold <kbd>Shift</kbd> for 5°), or type its angle on the right.</li>
+    <li><b>Remove</b> what's selected with <kbd>Delete</kbd> or the button on the right. Anything removed can be brought back from the list.</li>
+    <li><b>Zoom</b> with the mouse wheel, the buttons or <kbd>+</kbd> and <kbd>−</kbd>; drag an empty spot to move around, and <kbd>0</kbd> shows the whole map again.</li>
+    <li><b>Floor</b> shows in green where the app reads the floor. Every callout and mark has to stand on it, or the app's own checks fail; anything in a wall gets an orange ring, and the right side offers to move it onto the floor.</li>
+    <li><b>Names</b> sit next to their dot the way the app places them (above, or below, right or left when another name is in the way), or right on the spot when dots are off, so put each dot in the middle of the area it names. Names, dots and marks grow with the map as you zoom, as they do in the app.</li>
+    <li><b>Your work is kept</b> in this browser as you go, so you can close the file and come back. When you're done, choose <b>Save edits file</b> and send that file over. <b>Open edits file</b> loads one back in to keep going.</li>
+    <li><b>Save picture</b> saves the map you're on as an image, with its names and marks.</li>
+  </ul>
+  <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes and <kbd>Ctrl</kbd>+<kbd>Y</kbd> redoes; <kbd>Esc</kbd> goes back to moving things.</p>
+  <div class="foot"><button class="btn primary" data-close>Got it</button></div>
+</div></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+const DATA = /*DATA*/null;
+
+// ---------- small helpers ----------
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const r3 = (v) => Math.round(Math.min(1, Math.max(0, Number(v) || 0)) * 1000) / 1000;
+const far = (a, b) => Math.abs(a[0] - b[0]) > 0.0005 || Math.abs(a[1] - b[1]) > 0.0005;
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* no storage here: edits last until the tab closes */ } },
+};
+const KEY = 'playbook-map-editor';
+const KINDS = DATA.kinds;
+const kindOf = (k) => KINDS.find((x) => x.kind === k);
+const TEXT_SIZES = [['s', 'Small', 0.45], ['m', 'Medium', 0.58], ['l', 'Large', 0.72], ['xl', 'Extra large', 0.9]];
+/** A callout's dot radius and the space from it to its name, for 3-unit names: the app's own. */
+const DOT = 0.8, LABEL_GAP = 0.9;
+/** A mark's turn, as whole degrees from 0 to 359. */
+const turn = (v) => ((Math.round(Number(v) || 0) % 360) + 360) % 360;
+const KEYS = { callout: 'c', orb: 'o', door: 'd', breakable: 'b', wall: 'w', teleporter: 't', rope: 'r', zipline: 'z', drop: 's', plant: 'p', safeplant: 'a' };
+const ZOOM_MAX = 8, ZOOM_STEP = 1.4, FRAME = 108;
+const shortName = (n) => (n === 'Attacker Side Spawn' ? 'Attack spawn' : n === 'Defender Side Spawn' ? 'Defense spawn' : n).replace(/^(Attacker|Defender) Side /, '');
+
+let seq = 0;
+const uid = (p) => `${p}${++seq}`;
+const MAPS = DATA.maps;
+const mapOf = (id) => MAPS.find((m) => m.id === id);
+
+// ---------- where the floor is (the same reading as the app's) ----------
+const N = DATA.floorSize;
+const floors = new Map();
+function around(k) {
+  const x = k % N, y = (k - x) / N, out = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if ((dx || dy) && x + dx >= 0 && x + dx < N && y + dy >= 0 && y + dy < N) out.push(k + dy * N + dx);
+  }
+  return out;
+}
+function floorOf(id) {
+  if (floors.has(id)) return floors.get(id);
+  const b64 = mapOf(id).floor;
+  let f = null;
+  if (b64) {
+    const bits = atob(b64), on = new Uint8Array(N * N), clear = new Uint8Array(N * N);
+    for (let k = 0; k < N * N; k++) on[k] = (bits.charCodeAt(k >> 3) >> (k & 7)) & 1;
+    let ring = [];
+    for (let k = 0; k < N * N; k++) {
+      if (!on[k]) continue;
+      const x = k % N, y = (k - x) / N;
+      if (x === 0 || y === 0 || x === N - 1 || y === N - 1 || !on[k - 1] || !on[k + 1] || !on[k - N] || !on[k + N]) { clear[k] = 1; ring.push(k); }
+    }
+    for (let d = 2; ring.length && d < 255; d++) {
+      const next = [];
+      for (const k of ring) for (const n of around(k)) if (on[n] && !clear[n]) { clear[n] = d; next.push(n); }
+      ring = next;
+    }
+    f = { on, clear };
+  }
+  floors.set(id, f);
+  return f;
+}
+const cellOf = ([x, y]) => Math.min(N - 1, Math.max(0, Math.floor(y * N))) * N + Math.min(N - 1, Math.max(0, Math.floor(x * N)));
+function onFloor(id, s) {
+  const f = floorOf(id);
+  if (!f) return true;
+  const k = cellOf(s);
+  return f.on[k] === 1 || around(k).some((n) => f.on[n] === 1 && f.clear[n] >= 2);
+}
+/** The nearest spot well inside the floor (two cells from any wall), or null. */
+function nearestFloor(id, s) {
+  const f = floorOf(id);
+  if (!f) return null;
+  const start = cellOf(s), seen = new Set([start]);
+  let ring = [start];
+  for (let d = 0; d < 60 && ring.length; d++) {
+    const next = [];
+    for (const c of ring) {
+      if (f.on[c] && f.clear[c] >= 2) return [r3(((c % N) + 0.5) / N), r3((Math.floor(c / N) + 0.5) / N)];
+      for (const n of around(c)) if (!seen.has(n)) { seen.add(n); next.push(n); }
+    }
+    ring = next;
+  }
+  return null;
+}
+const floorArt = new Map();
+function floorImage(id) {
+  if (floorArt.has(id)) return floorArt.get(id);
+  const f = floorOf(id);
+  let url = '';
+  if (f) {
+    const c = document.createElement('canvas');
+    c.width = c.height = N;
+    const ctx = c.getContext('2d'), img = ctx.createImageData(N, N);
+    for (let k = 0; k < N * N; k++) if (f.on[k]) { img.data[k * 4] = 70; img.data[k * 4 + 1] = 220; img.data[k * 4 + 2] = 120; img.data[k * 4 + 3] = 105; }
+    ctx.putImageData(img, 0, 0);
+    url = c.toDataURL();
+  }
+  floorArt.set(id, url);
+  return url;
+}
+
+// ---------- the data: as the app has it, and as edited ----------
+const ORIG = {}, S = {};
+/** Which marks this editor started from, so edits made from other marks are matched with care. */
+const MARKS_ID = (() => { let h = 0; for (const ch of JSON.stringify(MAPS.map((m) => m.features))) h = (h * 31 + ch.charCodeAt(0)) | 0; return (h >>> 0).toString(36); })();
+for (const m of MAPS) {
+  ORIG[m.id] = {
+    callouts: m.callouts.map((c) => ({ uid: uid('c'), name: c.name, at: [c.x, c.y] })),
+    features: m.features.map((f) => ({ uid: uid('f'), kind: f.kind, at: [...f.at], to: f.to ? [...f.to] : null, about: f.about, angle: turn(f.angle) })),
+  };
+  S[m.id] = clone(ORIG[m.id]);
+}
+
+/** What changed on a map, in words, each with the thing it's about. */
+function changesOf(id) {
+  const o = ORIG[id], s = S[id], out = [];
+  const oc = new Map(o.callouts.map((c) => [c.uid, c])), of = new Map(o.features.map((f) => [f.uid, f]));
+  for (const c of s.callouts) {
+    const was = oc.get(c.uid);
+    if (!was) { out.push({ uid: c.uid, text: `Added the callout ${c.name}` }); continue; }
+    if (was.name !== c.name) out.push({ uid: c.uid, text: `Renamed ${was.name} to ${c.name}` });
+    if (far(was.at, c.at)) out.push({ uid: c.uid, text: `Moved ${c.name}` });
+  }
+  const sc = new Set(s.callouts.map((c) => c.uid));
+  for (const c of o.callouts) if (!sc.has(c.uid)) out.push({ uid: null, text: `Removed the callout ${c.name}` });
+  for (const f of s.features) {
+    const was = of.get(f.uid), what = `${kindOf(f.kind).name.toLowerCase()} “${f.about}”`;
+    if (!was) { out.push({ uid: f.uid, text: `Added the ${what}` }); continue; }
+    if (was.kind !== f.kind) out.push({ uid: f.uid, text: `Made “${f.about}” a ${kindOf(f.kind).name.toLowerCase()}` });
+    if (was.about !== f.about) out.push({ uid: f.uid, text: `Reworded “${was.about}” to “${f.about}”` });
+    if (far(was.at, f.at) || (!!was.to !== !!f.to) || (was.to && f.to && far(was.to, f.to))) out.push({ uid: f.uid, text: `Moved the ${what}` });
+    if (turn(was.angle) !== turn(f.angle)) out.push({ uid: f.uid, text: `Turned the ${what} to ${turn(f.angle)}°` });
+  }
+  const sf = new Set(s.features.map((f) => f.uid));
+  for (const f of o.features) if (!sf.has(f.uid)) out.push({ uid: null, text: `Removed the ${kindOf(f.kind).name.toLowerCase()} “${f.about}”` });
+  return out;
+}
+
+/** What the app's checks would refuse, so it can be fixed before the file goes off. */
+function problemsOf(id) {
+  const m = mapOf(id), s = S[id], out = [];
+  const names = new Map();
+  for (const c of s.callouts) {
+    const n = c.name.trim();
+    if (!n) out.push({ uid: c.uid, text: 'A callout has no name' });
+    else if (names.has(n)) out.push({ uid: c.uid, text: `Two callouts are called ${n}` });
+    names.set(n, true);
+    if (!onFloor(id, c.at)) out.push({ uid: c.uid, text: `${n || 'A callout'} is in a wall` });
+  }
+  for (const f of s.features) {
+    const what = f.about.trim() ? `“${f.about.trim()}”` : `A ${kindOf(f.kind).name.toLowerCase()}`;
+    if (f.about.trim().length <= 10) out.push({ uid: f.uid, text: `${what} needs a few more words on what it is` });
+    if (/\.\s*$/.test(f.about)) out.push({ uid: f.uid, text: `${what} ends with a full stop, which the app leaves off` });
+    if (!onFloor(id, f.at) || (f.to && !onFloor(id, f.to))) out.push({ uid: f.uid, text: `${what} is in a wall` });
+  }
+  const orbs = s.features.filter((f) => f.kind === 'orb').length, want = id === 'fracture' ? 4 : 2;
+  if (orbs && orbs !== want) out.push({ uid: null, text: `${m.name} has ${plural(orbs, 'ultimate orb', 'ultimate orbs')}; the app expects ${want}` });
+  // each site has one default plant and one safe plant, nearer its own site than any other
+  for (const site of m.sites) for (const kind of ['plant', 'safeplant']) {
+    const n = s.features.filter((f) => f.kind === kind && siteNear(m, s, f.at) === site).length;
+    if (n !== 1) out.push({ uid: null, text: `${site} Site has ${n === 0 ? 'no' : n} ${kindOf(kind).name.toLowerCase()}${n > 1 ? 's' : ''}; the app expects one` });
+  }
+  return out;
+}
+
+// ---------- edits files ----------
+function editsOf(id) {
+  const o = ORIG[id], s = S[id];
+  const oc = new Map(o.callouts.map((c) => [c.uid, c]));
+  const sc = new Set(s.callouts.map((c) => c.uid)), sf = new Set(s.features.map((f) => f.uid));
+  return {
+    name: mapOf(id).name,
+    changes: changesOf(id).map((c) => c.text),
+    problems: problemsOf(id).map((p) => p.text),
+    callouts: s.callouts.map((c) => {
+      const was = oc.get(c.uid), out = { name: c.name.trim(), x: c.at[0], y: c.at[1] };
+      if (!was) out.new = true; else if (was.name !== c.name.trim()) out.from = was.name;
+      return out;
+    }),
+    removedCallouts: o.callouts.filter((c) => !sc.has(c.uid)).map((c) => c.name),
+    features: s.features.map((f) => {
+      const ref = o.features.findIndex((x) => x.uid === f.uid);
+      return { kind: f.kind, at: f.at, ...(f.to ? { to: f.to } : {}), about: f.about.trim(), ...(turn(f.angle) ? { angle: turn(f.angle) } : {}), ...(ref >= 0 ? { ref } : { new: true }) };
+    }),
+    removedFeatures: o.features.filter((f) => !sf.has(f.uid)).map((f) => f.about),
+  };
+}
+const editedMaps = () => MAPS.filter((m) => changesOf(m.id).length);
+function editsFile() {
+  const maps = {};
+  for (const m of editedMaps()) maps[m.id] = editsOf(m.id);
+  return { format: 'playbook-map-edits', madeFrom: DATA.version, marksFrom: MARKS_ID, savedAt: new Date().toISOString(), maps };
+}
+
+const spot = (v) => (Array.isArray(v) && v.length === 2 && v.every((n) => Number.isFinite(Number(n))) ? [r3(v[0]), r3(v[1])] : null);
+/** Takes in a file of edits (or the kept work), checking each part; returns how many maps it changed. */
+function takeEdits(file) {
+  if (!file || file.format !== 'playbook-map-edits' || typeof file.maps !== 'object' || !file.maps) throw new Error('This isn’t a map edits file from this editor.');
+  let n = 0;
+  const same = file.marksFrom === MARKS_ID;
+  for (const [id, e] of Object.entries(file.maps)) {
+    const o = ORIG[id];
+    if (!o || !e || !Array.isArray(e.callouts) || !Array.isArray(e.features)) continue;
+    const byName = new Map(o.callouts.map((c) => [c.name, c])), used = new Set();
+    const callouts = [];
+    for (const c of e.callouts) {
+      const at = spot([c && c.x, c && c.y]);
+      if (!at || typeof c.name !== 'string') continue;
+      const base = c.new ? null : byName.get(typeof c.from === 'string' ? c.from : c.name);
+      const id2 = base && !used.has(base.uid) ? base.uid : uid('n');
+      used.add(id2);
+      callouts.push({ uid: id2, name: c.name.slice(0, 60), at });
+    }
+    // edits made from these very marks keep to their place in the list; edits made from other marks
+    // (an older editor, or work kept from one) are matched by their words, then by their place in the
+    // list where the mark hasn't moved, then by where they are, so they still land on the right marks
+    const features = [], free = (x, f) => x && x.kind === f.kind && !used.has(x.uid);
+    for (const f of e.features) {
+      const at = spot(f && f.at);
+      if (!at || !kindOf(f.kind)) continue;
+      const r = Number.isInteger(f.ref) && !f.new ? o.features[f.ref] : null, ref = r && !used.has(r.uid) && (same || r.kind === f.kind) ? r : null;
+      const base = same ? ref
+        : o.features.find((x) => free(x, f) && x.about === f.about)
+        || (ref && !far(ref.at, at) ? ref : null)
+        || o.features.find((x) => free(x, f) && Math.hypot(x.at[0] - at[0], x.at[1] - at[1]) < 0.01);
+      const id2 = base ? base.uid : uid('n');
+      used.add(id2);
+      const to = spot(f.to);
+      features.push({ uid: id2, kind: f.kind, at, to: kindOf(f.kind).ends === 1 ? null : to, about: typeof f.about === 'string' ? f.about.slice(0, 300) : '', angle: turn(f.angle) });
+    }
+    // marks the app has gained since the edits were made, and that they don't say were removed, stay
+    const gone = new Set(Array.isArray(e.removedFeatures) ? e.removedFeatures : []);
+    if (!same) for (const x of o.features) if (!used.has(x.uid) && !gone.has(x.about)) features.push(clone(x));
+    S[id] = { callouts, features };
+    n++;
+  }
+  return n;
+}
+
+// ---------- what's on screen ----------
+const view = Object.assign({ map: MAPS[0].id, names: true, dots: true, marks: true, floor: false, ghosts: true, text: 'm', theme: 'system' }, store.get(`${KEY}.view`) || {});
+if (!mapOf(view.map)) view.map = MAPS[0].id;
+let mode = 'move', sel = null, selEnd = 'at', z = 1, cx = 50, cy = 50;
+const undos = [], redos = [];
+const cur = () => S[view.map];
+const findItem = (u) => cur().callouts.find((c) => c.uid === u) || cur().features.find((f) => f.uid === u) || null;
+const isCallout = (it) => it && 'name' in it;
+
+function begin() {
+  undos.push({ map: view.map, data: clone(cur()), sel });
+  if (undos.length > 300) undos.shift();
+  redos.length = 0;
+}
+function swap(from, to) {
+  const e = from.pop();
+  if (!e) return;
+  to.push({ map: e.map, data: clone(S[e.map]), sel });
+  S[e.map] = e.data;
+  if (e.map !== view.map) { view.map = e.map; z = 1; cx = cy = 50; }
+  sel = e.sel && findItem(e.sel) ? e.sel : null;
+  changed(true);
+}
+function changed(full) {
+  store.set(KEY, editsFile());
+  store.set(`${KEY}.view`, view);
+  renderMarks();
+  renderMaps();
+  renderList();
+  renderInspector(full);
+  $('#undo').disabled = !undos.length;
+  $('#redo').disabled = !redos.length;
+}
+
+const svg = $('#svg'), marks = $('#marks'), stage = $('#stage');
+function viewBox() {
+  const size = FRAME / z, lo = -4, hi = 104 - size;
+  const vx = Math.min(hi, Math.max(lo, cx - size / 2)), vy = Math.min(hi, Math.max(lo, cy - size / 2));
+  cx = vx + size / 2; cy = vy + size / 2;
+  return [vx, vy, size];
+}
+
+/** Puts each name above its spot, or below, right or left when that would cover one already placed or a mark (`marks`, each reaching `mark` out from its middle), a little way from the spot's dot (`dot` is its radius), or right on the spot without dots (`dot` below 0): the app's own rule. */
+function placeLabels(spots, k, dot, marks = [], mark = 0) {
+  const boxes = marks.map(([x, y]) => ({ l: x - mark, r: x + mark, t: y - mark, b: y + mark })), out = [], gap = LABEL_GAP * k + Math.max(0, dot);
+  for (const s of spots) {
+    const w = (s.text.length * 1.6 + 1) * k, h = 3.4 * k;
+    const tries = dot < 0 ? [{ ...s, x: s.x, y: s.y + 1.1 * k, anchor: 'middle' }] : [
+      { ...s, x: s.x, y: s.y - gap, anchor: 'middle' },
+      { ...s, x: s.x, y: s.y + 2.2 * k + gap, anchor: 'middle' },
+      { ...s, x: s.x + gap, y: s.y + 1.1 * k, anchor: 'start' },
+      { ...s, x: s.x - gap, y: s.y + 1.1 * k, anchor: 'end' },
+    ];
+    const boxOf = (t) => { const l = t.anchor === 'middle' ? t.x - w / 2 : t.anchor === 'start' ? t.x : t.x - w; return { l, r: l + w, t: t.y - h + 0.6 * k, b: t.y + 0.6 * k }; };
+    const covered = (t) => { const b = boxOf(t); return boxes.reduce((n, o) => n + Math.max(0, Math.min(b.r, o.r) - Math.max(b.l, o.l)) * Math.max(0, Math.min(b.b, o.b) - Math.max(b.t, o.t)), 0); };
+    const free = tries.map((t) => ({ t, n: covered(t) })).reduce((a, b) => (b.n < a.n ? b : a)).t;
+    boxes.push(boxOf(free));
+    out.push(free);
+  }
+  return out;
+}
+
+/** A mark's shape, in map units (0 to 100), as the app draws it, turned `angle` degrees clockwise. */
+function markSvg(kind, x, y, mk, angle) {
+  const shape = markShape(kind, x, y, mk);
+  return angle ? `<g transform="rotate(${angle} ${x} ${y})">${shape}</g>` : shape;
+}
+function markShape(kind, x, y, u) {
+  const w = (v) => `stroke-width:${v * u}px`;
+  const bar = (h) => `<rect x="${x - 1.1 * u}" y="${y - (h / 2) * u}" width="${2.2 * u}" height="${h * u}" rx="${Math.min(0.25, h / 2) * u}" class="mark" style="${w(0.25)}"/>`;
+  switch (kind) {
+    case 'orb': return `<path d="M${x} ${y - 0.95 * u}L${x + 0.95 * u} ${y}L${x} ${y + 0.95 * u}L${x - 0.95 * u} ${y}Z" class="mark" style="${w(0.25)}"/>`;
+    case 'door': return bar(0.85);
+    case 'breakable': case 'wall': return bar(0.5);
+    case 'teleporter': return `<circle cx="${x}" cy="${y}" r="${0.85 * u}" class="mark ring" style="${w(0.35)}"/>`;
+    case 'drop': return `<rect x="${x - 0.75 * u}" y="${y - 0.75 * u}" width="${1.5 * u}" height="${1.5 * u}" rx="${0.15 * u}" class="mark" style="${w(0.25)}"/>`;
+    case 'plant': return `<path d="${hexagon(x, y, 0.95 * u)}" class="mark" style="${w(0.25)}"/>`;
+    case 'safeplant': return `<path d="${hexagon(x, y, 0.8 * u)}" class="mark ring" style="${w(0.35)}"/>`;
+    default: return `<circle cx="${x}" cy="${y}" r="${0.6 * u}" class="mark" style="${w(0.25)}"/>`;
+  }
+}
+const P = (s) => [s[0] * 100, s[1] * 100];
+/** A six-sided outline with a point at the top, as the app draws plant spots. */
+function hexagon(x, y, r) {
+  return Array.from({ length: 6 }, (_, k) => { const a = (k * Math.PI) / 3; return `${k ? 'L' : 'M'}${(x + r * Math.sin(a)).toFixed(2)} ${(y - r * Math.cos(a)).toFixed(2)}`; }).join('') + 'Z';
+}
+
+function renderMarks() {
+  const m = mapOf(view.map), s = cur(), o = ORIG[view.map];
+  const [vx, vy, size] = viewBox();
+  svg.setAttribute('viewBox', `${vx} ${vy} ${size} ${size}`);
+  // names, dots and marks are in the map's units, so they grow as it zooms, as in the app; the
+  // editor's own rings and lines keep their size on screen, but never get smaller than what they ring
+  const mk = 1 / z, k = TEXT_SIZES.find((t) => t[0] === view.text)[2], dot = DOT * k;
+  const origOf = new Map([...o.callouts, ...o.features].map((x) => [x.uid, x]));
+  let h = '', hits = '';
+  // where things were
+  if (view.ghosts) {
+    for (const it of [...s.callouts, ...(view.marks ? s.features : [])]) {
+      const was = origOf.get(it.uid);
+      if (!was) continue;
+      for (const end of ['at', 'to']) {
+        if (!was[end] || !it[end] || !far(was[end], it[end])) continue;
+        const [x0, y0] = P(was[end]), [x1, y1] = P(it[end]);
+        h += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" class="ghost-line" style="stroke-width:${0.25 * mk}px;stroke-dasharray:${0.6 * mk} ${0.5 * mk}"/>`;
+        h += `<circle cx="${x0}" cy="${y0}" r="${0.9 * mk}" class="ghost" style="stroke-width:${0.25 * mk}px"/>`;
+      }
+    }
+  }
+  if (view.marks) {
+    for (const f of s.features) {
+      const [x, y] = P(f.at);
+      h += `<g class="f-${f.kind}">`;
+      if (f.to) {
+        const [x2, y2] = P(f.to);
+        h += `<line x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" class="link${f.kind === 'teleporter' ? ' faint' : ''}" style="stroke-width:${f.kind === 'teleporter' ? 0.3 : 0.45}px"/>`;
+      }
+      h += markSvg(f.kind, x, y, 1, f.angle);
+      if (f.to) h += markSvg(f.kind, ...P(f.to), 1, f.angle);
+      h += '</g>';
+      for (const end of f.to ? ['at', 'to'] : ['at']) {
+        const [ex, ey] = P(f[end]);
+        if (!onFloor(view.map, f[end])) h += `<circle cx="${ex}" cy="${ey}" r="${Math.max(2.5 * mk, 2.9)}" class="wall-ring" style="stroke-width:${0.4 * mk}px;stroke-dasharray:${0.8 * mk} ${0.5 * mk}"/>`;
+        if (sel === f.uid) h += `<circle cx="${ex}" cy="${ey}" r="${Math.max(2.9 * mk, 3.2)}" class="sel-ring" style="stroke-width:${0.45 * mk}px"/>`;
+        hits += `<circle cx="${ex}" cy="${ey}" r="${Math.max(2.3 * mk, 2)}" fill="transparent" class="hit" data-uid="${f.uid}" data-end="${end}"><title>${esc(f.about)}${f.to ? (end === 'at' ? ' (one end)' : ' (other end)') : ''}</title></circle>`;
+      }
+    }
+  }
+  for (const c of s.callouts) {
+    const [x, y] = P(c.at);
+    if (!onFloor(view.map, c.at)) h += `<circle cx="${x}" cy="${y}" r="${Math.max(2.2 * mk, dot + 0.8)}" class="wall-ring" style="stroke-width:${0.4 * mk}px;stroke-dasharray:${0.8 * mk} ${0.5 * mk}"/>`;
+    if (sel === c.uid) h += `<circle cx="${x}" cy="${y}" r="${Math.max(2.4 * mk, dot + 1)}" class="sel-ring" style="stroke-width:${0.45 * mk}px"/>`;
+    if (view.dots || sel === c.uid) h += `<circle cx="${x}" cy="${y}" r="${dot}" class="dot" style="stroke-width:${0.3 * dot}px"/>`;
+    hits += `<circle cx="${x}" cy="${y}" r="${Math.max(1.8 * mk, dot + 0.4)}" fill="transparent" class="hit" data-uid="${c.uid}" data-end="at"><title>${esc(c.name)}</title></circle>`;
+  }
+  if (view.names) {
+    const labels = placeLabels(s.callouts.map((c) => ({ uid: c.uid, text: shortName(c.name.trim() || 'Unnamed'), x: c.at[0] * 100, y: c.at[1] * 100 })), k, view.dots ? dot : -1, view.marks ? s.features.flatMap((f) => [f.at, ...(f.to ? [f.to] : [])]).map(P) : [], 1.2);
+    for (const l of labels) {
+      h += `<text x="${l.x}" y="${l.y}" text-anchor="${l.anchor}" class="lbl${sel === l.uid ? ' sel' : ''}" data-uid="${l.uid}" data-end="at" style="font-size:${3 * k}px;stroke-width:${0.7 * k}px">${esc(l.text)}</text>`;
+    }
+  }
+  marks.innerHTML = h + hits;
+  $('#zin').disabled = z >= ZOOM_MAX;
+  $('#zout').disabled = $('#zfit').disabled = z <= 1;
+  stage.classList.toggle('adding', mode !== 'move');
+}
+
+function renderStatic() {
+  const m = mapOf(view.map);
+  $('#art').setAttribute('href', m.art || '');
+  $('#floor').setAttribute('href', view.floor ? floorImage(m.id) : '');
+  document.title = `${m.name} · Playbook map editor`;
+}
+
+function renderMaps() {
+  $('#maps').innerHTML = MAPS.map((m) => {
+    const n = changesOf(m.id).length;
+    return `<button class="map-btn" data-map="${m.id}" aria-current="${m.id === view.map}"><span class="name">${esc(m.name)}</span>${n ? `<span class="badge" title="${plural(n, 'change', 'changes')}">${n}</span>` : ''}</button>`;
+  }).join('');
+}
+
+function swatch(kind) {
+  if (kind === 'callout') return '<span class="dotmark" aria-hidden="true"></span>';
+  const link = kind === 'rope' || kind === 'zipline' ? `<line x1="-2.6" y1="0" x2="2.6" y2="0" class="link" style="stroke-width:0.45px"/>` : '';
+  return `<svg class="swatch f-${kind}" viewBox="-3 -3 6 6" aria-hidden="true">${link}${markSvg(kind, 0, 0, 2)}</svg>`;
+}
+function renderTools() {
+  const tools = [['move', 'Move', 'v'], ['callout', 'Callout', 'c'], ...KINDS.map((k) => [k.kind, k.name, KEYS[k.kind]])];
+  $('#tools').innerHTML = `<span class="group-label">Tool</span>` + tools.map(([id, name, key], i) => {
+    const icon = id === 'move' ? '<svg class="mini" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3l7 17 2.5-7.5L21 10z"/></svg>' : swatch(id);
+    return `<button class="tool" data-mode="${id}" aria-pressed="${mode === id}" title="${esc(i === 0 ? 'Select and move' : `Add: ${name}`)} (${key.toUpperCase()})">${icon}${esc(name)}</button>`;
+  }).join('');
+  const hints = { move: 'Drag a dot, name or mark to move it. Click one to select it.', callout: 'Click the map where the new callout goes.' };
+  $('#hint').textContent = hints[mode] || `Click the map where the ${kindOf(mode).name.toLowerCase()} goes${kindOf(mode).ends === 2 ? ' (it gets two ends)' : ''}. Esc to stop.`;
+}
+
+function renderList() {
+  const s = cur(), o = ORIG[view.map], m = mapOf(view.map);
+  const ch = changesOf(view.map), probs = problemsOf(view.map);
+  const tagsOf = (u) => {
+    const t = [];
+    const texts = ch.filter((c) => c.uid === u).map((c) => c.text);
+    if (texts.some((x) => x.startsWith('Added'))) t.push('<span class="tag new">new</span>');
+    else {
+      if (texts.some((x) => x.startsWith('Renamed') || x.startsWith('Reworded') || x.startsWith('Made'))) t.push('<span class="tag">edited</span>');
+      if (texts.some((x) => x.startsWith('Moved'))) t.push('<span class="tag">moved</span>');
+    }
+    if (probs.some((p) => p.uid === u)) t.push('<span class="tag warn">check</span>');
+    return t.join('');
+  };
+  const q = ($('#filter') && $('#filter').value || '').toLowerCase();
+  const match = (t) => !q || t.toLowerCase().includes(q);
+  const row = (u, icon, label) => `<li><button class="item" data-sel="${u}" aria-current="${sel === u}">${icon}<span class="label">${esc(label)}</span>${tagsOf(u)}</button></li>`;
+  const sc = new Set(s.callouts.map((c) => c.uid)), sf = new Set(s.features.map((f) => f.uid));
+  const gone = [...o.callouts.filter((c) => !sc.has(c.uid)).map((c) => ({ uid: c.uid, label: c.name, icon: swatch('callout') })), ...o.features.filter((f) => !sf.has(f.uid)).map((f) => ({ uid: f.uid, label: f.about, icon: swatch(f.kind) }))];
+  const focused = document.activeElement && document.activeElement.id === 'filter';
+  const pos = focused ? document.activeElement.selectionStart : 0;
+  $('#listCard').innerHTML = `
+    <div class="list-head"><div class="title">${esc(m.name)}</div>${ch.length ? `<button class="btn small" id="resetMap">Undo all on this map</button>` : ''}</div>
+    <input class="filter" id="filter" type="search" placeholder="Find a callout or mark" aria-label="Find a callout or mark" value="${esc(q)}">
+    <h2 style="margin:4px 0 0">Callouts · ${s.callouts.length}</h2>
+    <ul class="items">${s.callouts.filter((c) => match(c.name)).map((c) => row(c.uid, swatch('callout'), c.name.trim() || 'Unnamed')).join('') || '<li class="empty">None found</li>'}</ul>
+    <h2 style="margin:4px 0 0">Marks · ${s.features.length}</h2>
+    <ul class="items">${s.features.filter((f) => match(f.about + ' ' + f.kind)).map((f) => row(f.uid, swatch(f.kind), f.about.trim() || kindOf(f.kind).name)).join('') || '<li class="empty">None found</li>'}</ul>
+    ${gone.length ? `<h2 style="margin:4px 0 0">Removed · ${gone.length}</h2><ul class="items">${gone.map((g) => `<li><div class="item" style="cursor:default">${g.icon}<span class="label">${esc(g.label)}</span><button class="btn small" data-restore="${g.uid}">Bring back</button></div></li>`).join('')}</ul>` : ''}`;
+  if (focused) { const f = $('#filter'); f.focus(); f.setSelectionRange(pos, pos); }
+}
+
+function xyRow(label, end, at) {
+  return `<div class="xy"><span>${label}</span>
+    <input type="number" min="0" max="1" step="0.001" value="${at[0]}" data-xy="${end}:0" aria-label="${label}: across, from 0 (left) to 1 (right)" title="Across: 0 is the left edge, 1 the right">
+    <input type="number" min="0" max="1" step="0.001" value="${at[1]}" data-xy="${end}:1" aria-label="${label}: down, from 0 (top) to 1 (bottom)" title="Down: 0 is the top edge, 1 the bottom"></div>`;
+}
+function renderInspector(force) {
+  const box = $('#inspector');
+  if (!force && box.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) {
+    // keep what's being typed; just bring the places up to date
+    const it = sel && findItem(sel);
+    if (it) box.querySelectorAll('[data-xy]').forEach((inp) => { if (inp !== document.activeElement) { const [end, i] = inp.dataset.xy.split(':'); if (it[end]) inp.value = it[end][+i]; } });
+    const a = $('#i-angle');
+    if (it && a && a !== document.activeElement) a.value = turn(it.angle);
+    return;
+  }
+  const it = sel && findItem(sel);
+  const m = mapOf(view.map);
+  if (!it) {
+    const ch = changesOf(view.map), total = editedMaps().length;
+    box.innerHTML = `<div class="card"><div class="title">Nothing selected</div>
+      <p class="empty" style="margin:0">Click a dot, a name or a mark on the map, or pick one from the list below.</p>
+      ${ch.length ? `<div class="note info">${plural(ch.length, 'change', 'changes')} on ${esc(m.name)}${total > 1 ? `, and changes on ${plural(total - 1, 'other map', 'other maps')}` : ''}.</div>` : total ? `<div class="note info">Changes on ${plural(total, 'map', 'maps')} so far.</div>` : ''}</div>`;
+    return;
+  }
+  const was = [...ORIG[view.map].callouts, ...ORIG[view.map].features].find((x) => x.uid === it.uid);
+  const probs = problemsOf(view.map).filter((p) => p.uid === it.uid);
+  const wall = ['at', 'to'].filter((e) => it[e] && !onFloor(view.map, it[e]));
+  let h = '<div class="card">';
+  if (isCallout(it)) {
+    const aka = m.aka[was ? was.name : it.name];
+    const inPlays = was && m.inPlays.includes(was.name);
+    h += `<div class="title">${swatch('callout')} Callout${was ? '' : ' <span class="tag new">new</span>'}</div>
+      <label class="field"><span>Name</span><input id="i-name" value="${esc(it.name)}" maxlength="60" autocomplete="off" spellcheck="false"></label>
+      ${aka && aka !== it.name ? `<div class="note info">Players also call it ${esc(aka)}; the app shows that next to the name.</div>` : ''}
+      ${xyRow('Place', 'at', it.at)}
+      ${inPlays && was.name !== it.name.trim() ? `<div class="note warn">Plays in the app go through ${esc(was.name)}; they'll move to the new name when these edits go in.</div>` : ''}`;
+  } else {
+    const k = kindOf(it.kind);
+    h += `<div class="title">${swatch(it.kind)} ${esc(k.name)}${was ? '' : ' <span class="tag new">new</span>'}</div>
+      <label class="field"><span>Kind</span><select id="i-kind">${KINDS.map((x) => `<option value="${x.kind}"${x.kind === it.kind ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>What it is (shown when you point at it in the app)</span><textarea id="i-about" maxlength="300">${esc(it.about)}</textarea></label>
+      ${xyRow(it.to ? 'One end' : 'Place', 'at', it.at)}
+      ${it.to ? xyRow(it.kind === 'teleporter' ? 'Where it goes' : 'Other end', 'to', it.to) : ''}
+      <div class="xy turn"><span>Turned</span>
+        <button class="btn small" id="i-left" title="Turn left 15° ([)" aria-label="Turn left 15 degrees">↺</button>
+        <input type="number" min="0" max="359" step="1" value="${turn(it.angle)}" id="i-angle" aria-label="Turned, in degrees clockwise from 0 to 359" title="Degrees clockwise: 0 is as drawn, 90 a quarter turn">
+        <button class="btn small" id="i-right" title="Turn right 15° (])" aria-label="Turn right 15 degrees">↻</button></div>
+      ${k.ends === 'maybe' ? `<div class="row"><button class="btn small" id="i-ends">${it.to ? 'Take off the other end' : 'Give it another end'}</button></div>` : ''}`;
+  }
+  if (wall.length) h += `<div class="note warn">${wall.length === 2 ? 'Both ends are' : it.to ? (wall[0] === 'at' ? 'One end is' : 'The other end is') : 'This is'} in a wall, so the app's checks won't take it. <button class="btn small" id="i-floor">Move onto the floor</button></div>`;
+  for (const p of probs) if (!/in a wall$/.test(p.text)) h += `<div class="note warn">${esc(p.text)}.</div>`;
+  if (!wall.length && !probs.length) h += '<div class="note ok">✓ On the floor, ready to go.</div>';
+  h += `<div class="row">${was ? `<button class="btn small" id="i-back"${changesOf(view.map).some((c) => c.uid === it.uid) ? '' : ' disabled'}>Put back as it was</button>` : ''}<button class="btn small danger" id="i-remove">Remove</button></div>`;
+  if (isCallout(it) && was && m.inPlays.includes(was.name)) h += `<p class="empty" style="margin:0;font-size:13px">Plays in the app go through this callout.</p>`;
+  box.innerHTML = h + '</div>';
+}
+
+// ---------- doing things ----------
+function select(u, reveal) {
+  if (u !== sel) selEnd = 'at';
+  sel = u;
+  const it = u && findItem(u);
+  if (it && reveal && z > 1) {
+    const [vx, vy, size] = viewBox(), [x, y] = P(it.at);
+    if (x < vx || x > vx + size || y < vy || y > vy + size) { cx = x; cy = y; }
+  }
+  renderMarks(); renderList(); renderInspector(true);
+}
+function setMap(id) {
+  if (!mapOf(id) || id === view.map) return;
+  view.map = id; sel = null; z = 1; cx = cy = 50;
+  store.set(`${KEY}.view`, view);
+  renderStatic(); renderMarks(); renderMaps(); renderList(); renderInspector(true);
+}
+function setMode(m) { mode = m; renderTools(); renderMarks(); }
+/** The site a spot is on: the one whose callout is nearest it, as the app works it out. */
+function siteNear(m, s, at) {
+  let best = null, d = Infinity;
+  for (const site of m.sites) {
+    const c = s.callouts.find((x) => x.name === `${site} Site`);
+    const e = c ? Math.hypot(c.at[0] - at[0], c.at[1] - at[1]) : Infinity;
+    if (e < d) { d = e; best = site; }
+  }
+  return best;
+}
+function nearestName(at) {
+  let best = null, d = Infinity;
+  for (const c of cur().callouts) { const e = Math.hypot(c.at[0] - at[0], c.at[1] - at[1]); if (e < d) { d = e; best = c.name; } }
+  return best;
+}
+function add(at) {
+  begin();
+  const s = cur();
+  if (mode === 'callout') {
+    let name = 'New callout', i = 2;
+    while (s.callouts.some((c) => c.name === name)) name = `New callout ${i++}`;
+    const c = { uid: uid('n'), name, at };
+    s.callouts.push(c);
+    sel = c.uid;
+  } else {
+    const k = kindOf(mode), near = nearestName(at);
+    const about = mode === 'orb' ? `Ultimate orb in ${near}` : mode === 'plant' ? `Default plant in the middle of ${siteNear(mapOf(view.map), s, at)} Site` : mode === 'safeplant' ? `Safe plant on ${siteNear(mapOf(view.map), s, at)} Site, just in from ${near}` : `${k.name} by ${near}`;
+    const f = { uid: uid('n'), kind: mode, at, to: k.ends === 2 ? [r3(at[0] + 0.05), at[1]] : null, about };
+    s.features.push(f);
+    sel = f.uid;
+  }
+  setMode('move');
+  changed(true);
+  const field = $('#i-name') || $('#i-about');
+  if (field) setTimeout(() => { field.focus(); field.select(); }, 0);
+}
+/** Turns a mark by `by` degrees; quick presses in a row undo together, as nudges do. */
+let lastTurn = 0;
+function turnBy(it, by) {
+  if (!it || isCallout(it)) return;
+  const now = Date.now();
+  if (now - lastTurn > 700) begin();
+  lastTurn = now;
+  it.angle = turn(turn(it.angle) + by);
+  changed(false);
+}
+function remove(u) {
+  const s = cur();
+  begin();
+  s.callouts = s.callouts.filter((c) => c.uid !== u);
+  s.features = s.features.filter((f) => f.uid !== u);
+  if (sel === u) sel = null;
+  changed(true);
+  toast('Removed. It’s in the list under Removed if you want it back.');
+}
+function restore(u) {
+  const o = ORIG[view.map], s = cur();
+  const c = o.callouts.find((x) => x.uid === u), f = o.features.find((x) => x.uid === u);
+  begin();
+  if (c) s.callouts.push(clone(c));
+  if (f) s.features.push(clone(f));
+  sel = u;
+  changed(true);
+}
+function putBack(u) {
+  const o = ORIG[view.map], s = cur();
+  begin();
+  s.callouts = s.callouts.map((x) => (x.uid === u ? clone(o.callouts.find((y) => y.uid === u)) : x));
+  s.features = s.features.map((x) => (x.uid === u ? clone(o.features.find((y) => y.uid === u)) : x));
+  changed(true);
+}
+
+let toastTimer = 0;
+function toast(text) {
+  const t = $('#toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
+}
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`; };
+
+// ---------- the map: pointer, wheel and keys ----------
+function toMap(e) {
+  const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+  return [p.x / 100, p.y / 100];
+}
+function zoomTo(nz, fx = 0.5, fy = 0.5) {
+  nz = Math.min(ZOOM_MAX, Math.max(1, nz));
+  const [vx, vy, size] = viewBox();
+  const px = vx + fx * size, py = vy + fy * size, ns = FRAME / nz;
+  z = nz; cx = px - fx * ns + ns / 2; cy = py - fy * ns + ns / 2;
+  renderMarks();
+}
+let drag = null;
+/** What's under the pointer: a name it's on, or else the nearest dot or mark end within reach. */
+function grab(e) {
+  const label = e.target.closest('text[data-uid]');
+  if (label) { const it = findItem(label.dataset.uid); return it ? { it, end: 'at' } : null; }
+  const [x, y] = toMap(e), mk = 1 / z;
+  let best = null, d = Infinity;
+  const near = (it, end, reach) => {
+    const e2 = Math.hypot((it[end][0] - x) * 100, (it[end][1] - y) * 100);
+    if (e2 <= reach && e2 < d) { d = e2; best = { it, end }; }
+  };
+  const dot = DOT * TEXT_SIZES.find((t) => t[0] === view.text)[2];
+  for (const c of cur().callouts) near(c, 'at', Math.max(1.8 * mk, dot + 0.4));
+  if (view.marks) for (const f of cur().features) { near(f, 'at', Math.max(2.3 * mk, 2)); if (f.to) near(f, 'to', Math.max(2.3 * mk, 2)); }
+  return best;
+}
+svg.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  // focus by hand, so a new callout's name field can keep the focus it's given
+  e.preventDefault();
+  svg.focus({ preventScroll: true });
+  const hit = mode === 'move' && grab(e);
+  if (hit) {
+    const { it, end } = hit, at = toMap(e);
+    drag = { kind: 'item', uid: it.uid, end, off: [it[end][0] - at[0], it[end][1] - at[1]], moved: false, id: e.pointerId };
+    if (sel !== it.uid) select(it.uid);
+    selEnd = end;
+  } else if (mode !== 'move') {
+    const at = toMap(e);
+    if (at[0] < 0 || at[0] > 1 || at[1] < 0 || at[1] > 1) return;
+    add([r3(at[0]), r3(at[1])]);
+    return;
+  } else {
+    drag = { kind: 'pan', x: e.clientX, y: e.clientY, cx, cy, moved: false, id: e.pointerId };
+  }
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', (e) => {
+  const at = toMap(e);
+  const inside = at[0] >= 0 && at[0] <= 1 && at[1] >= 0 && at[1] <= 1;
+  $('#where').textContent = inside ? `across ${at[0].toFixed(3)} · down ${at[1].toFixed(3)} · ${onFloor(view.map, at) ? 'floor' : 'wall'}` : '';
+  if (!drag || drag.id !== e.pointerId) return;
+  if (drag.kind === 'item') {
+    const it = findItem(drag.uid);
+    if (!it) return;
+    if (!drag.moved) { begin(); drag.moved = true; stage.classList.add('dragging'); }
+    it[drag.end] = [r3(at[0] + drag.off[0]), r3(at[1] + drag.off[1])];
+    renderMarks();
+    renderInspector(false);
+  } else {
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    if (z <= 1) return;
+    stage.classList.add('panning');
+    const per = (FRAME / z) / svg.getBoundingClientRect().width;
+    cx = drag.cx - dx * per; cy = drag.cy - dy * per;
+    renderMarks();
+  }
+});
+function endDrag(e) {
+  if (!drag || drag.id !== e.pointerId) return;
+  const d = drag;
+  drag = null;
+  stage.classList.remove('dragging', 'panning');
+  if (d.kind === 'item' && d.moved) changed(false);
+  if (d.kind === 'pan' && !d.moved && sel) select(null);
+}
+svg.addEventListener('pointerup', endDrag);
+svg.addEventListener('pointercancel', endDrag);
+svg.addEventListener('pointerleave', () => { if (!drag) $('#where').textContent = ''; });
+svg.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect();
+  zoomTo(z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+}, { passive: false });
+
+let lastNudge = 0;
+document.addEventListener('keydown', (e) => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.target.isContentEditable;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.altKey && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); swap(e.shiftKey ? redos : undos, e.shiftKey ? undos : redos); return; }
+  if (mod && !e.altKey && e.key.toLowerCase() === 'y' && !typing) { e.preventDefault(); swap(redos, undos); return; }
+  if (typing || mod || e.altKey || document.querySelector('dialog[open]')) return;
+  const key = e.key.toLowerCase();
+  if (key === 'escape') { if (mode !== 'move') setMode('move'); else if (sel) select(null); return; }
+  if (key === 'v') { setMode('move'); return; }
+  const tool = Object.entries(KEYS).find(([, k]) => k === key);
+  if (tool) { setMode(tool[0]); return; }
+  if (key === '+' || key === '=') { zoomTo(z * ZOOM_STEP); return; }
+  if (key === '-' || key === '_') { zoomTo(z / ZOOM_STEP); return; }
+  if (key === '0') { zoomTo(1); return; }
+  if ((key === 'delete' || key === 'backspace') && sel) { e.preventDefault(); remove(sel); return; }
+  if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && sel) { e.preventDefault(); turnBy(findItem(sel), (e.code === 'BracketLeft' ? -1 : 1) * (e.shiftKey ? 5 : 15)); return; }
+  const dirs = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+  if (dirs[key]) {
+    e.preventDefault();
+    const it = sel && findItem(sel);
+    if (it) {
+      const step = e.shiftKey ? 0.01 : 0.002, now = Date.now();
+      if (now - lastNudge > 700) begin();
+      lastNudge = now;
+      const end = it[selEnd] ? selEnd : 'at';
+      it[end] = [r3(it[end][0] + dirs[key][0] * step), r3(it[end][1] + dirs[key][1] * step)];
+      changed(false);
+    } else if (z > 1) {
+      cx += dirs[key][0] * 8 / z; cy += dirs[key][1] * 8 / z;
+      renderMarks();
+    }
+  }
+});
+
+// ---------- the side panels ----------
+$('#inspector').addEventListener('click', (e) => {
+  const it = sel && findItem(sel);
+  if (!it) return;
+  const id = e.target.closest('button')?.id;
+  if (id === 'i-remove') remove(it.uid);
+  else if (id === 'i-back') putBack(it.uid);
+  else if (id === 'i-left' || id === 'i-right') turnBy(it, id === 'i-left' ? -15 : 15);
+  else if (id === 'i-ends') { begin(); it.to = it.to ? null : [r3(it.at[0] + 0.03), r3(it.at[1] - 0.03)]; changed(true); }
+  else if (id === 'i-floor') {
+    begin();
+    for (const end of ['at', 'to']) if (it[end] && !onFloor(view.map, it[end])) { const n = nearestFloor(view.map, it[end]); if (n) it[end] = n; }
+    changed(true);
+  }
+});
+let typingStarted = false;
+$('#inspector').addEventListener('focusin', () => { typingStarted = false; });
+$('#inspector').addEventListener('input', (e) => {
+  const it = sel && findItem(sel);
+  if (!it) return;
+  const t = e.target;
+  if (t.tagName === 'SELECT') return; // the kind changes on its change event
+  if (!typingStarted) { begin(); typingStarted = true; }
+  if (t.id === 'i-name') it.name = t.value;
+  else if (t.id === 'i-about') it.about = t.value;
+  else if (t.id === 'i-angle') { if (t.value === '' || !Number.isFinite(Number(t.value))) return; it.angle = turn(t.value); }
+  else if (t.dataset.xy) {
+    const [end, i] = t.dataset.xy.split(':'), v = Number(t.value);
+    if (t.value === '' || !Number.isFinite(v)) return;
+    it[end] = i === '0' ? [r3(v), it[end][1]] : [it[end][0], r3(v)];
+  }
+  changed(false);
+});
+$('#inspector').addEventListener('change', (e) => {
+  const it = sel && findItem(sel);
+  if (!it) return;
+  if (e.target.id === 'i-kind') {
+    if (!typingStarted) begin();
+    it.kind = e.target.value;
+    const k = kindOf(it.kind);
+    if (k.ends === 1) it.to = null;
+    if (k.ends === 2 && !it.to) it.to = [r3(it.at[0] + 0.05), it.at[1]];
+    typingStarted = false;
+    changed(true);
+  }
+});
+$('#inspector').addEventListener('focusout', (e) => {
+  typingStarted = false;
+  // show the tidied numbers and any new warnings once the field is left
+  setTimeout(() => { if (!$('#inspector').contains(document.activeElement)) renderInspector(true); }, 0);
+});
+$('#listCard').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.sel) select(b.dataset.sel, true);
+  else if (b.dataset.restore) restore(b.dataset.restore);
+  else if (b.id === 'resetMap' && confirm(`Undo every change on ${mapOf(view.map).name}? (Undo brings them back.)`)) { begin(); S[view.map] = clone(ORIG[view.map]); sel = null; changed(true); }
+});
+$('#listCard').addEventListener('input', (e) => { if (e.target.id === 'filter') renderList(); });
+$('#maps').addEventListener('click', (e) => { const b = e.target.closest('[data-map]'); if (b) setMap(b.dataset.map); });
+$('#tools').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(mode === b.dataset.mode && mode !== 'move' ? 'move' : b.dataset.mode); });
+for (const [id, key] of [['names', 'names'], ['dots', 'dots'], ['marks', 'marks'], ['floor', 'floor'], ['ghosts', 'ghosts']]) {
+  const box = $(`#v-${id}`);
+  box.checked = !!view[key];
+  box.addEventListener('change', () => { view[key] = box.checked; store.set(`${KEY}.view`, view); renderStatic(); renderMarks(); });
+}
+$('#v-text').innerHTML = TEXT_SIZES.map(([id, name]) => `<option value="${id}"${id === view.text ? ' selected' : ''}>${name}</option>`).join('');
+$('#v-text').addEventListener('change', (e) => { view.text = e.target.value; store.set(`${KEY}.view`, view); renderMarks(); });
+$('#zin').addEventListener('click', () => zoomTo(z * ZOOM_STEP));
+$('#zout').addEventListener('click', () => zoomTo(z / ZOOM_STEP));
+$('#zfit').addEventListener('click', () => zoomTo(1));
+$('#undo').addEventListener('click', () => swap(undos, redos));
+$('#redo').addEventListener('click', () => swap(redos, undos));
+
+// ---------- theme ----------
+const THEMES = [['system', 'Theme: system'], ['light', 'Theme: light'], ['dark', 'Theme: dark']];
+function applyTheme() {
+  if (view.theme === 'system') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = view.theme;
+  $('#theme').textContent = THEMES.find((t) => t[0] === view.theme)[1];
+}
+$('#theme').addEventListener('click', () => {
+  const i = THEMES.findIndex((t) => t[0] === view.theme);
+  view.theme = THEMES[(i + 1) % THEMES.length][0];
+  store.set(`${KEY}.view`, view);
+  applyTheme();
+});
+
+// ---------- files ----------
+$('#open').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const file = JSON.parse(await f.text());
+    const n = takeEdits(file);
+    if (!n) { toast('That file has no map changes in it.'); return; }
+    undos.length = redos.length = 0;
+    sel = null;
+    const first = Object.keys(file.maps).find((id) => mapOf(id));
+    if (first) { view.map = first; z = 1; cx = cy = 50; renderStatic(); }
+    changed(true);
+    toast(`Opened edits for ${plural(n, 'map', 'maps')}${file.madeFrom && file.madeFrom !== DATA.version ? ` (made from Playbook v${file.madeFrom}, and this editor is from v${DATA.version})` : ''}.`);
+  } catch (err) {
+    toast(err instanceof SyntaxError ? 'That file couldn’t be read as an edits file.' : err.message);
+  }
+});
+
+const dlg = $('#exportDlg');
+$('#export').addEventListener('click', () => {
+  const maps = editedMaps();
+  let h = '<h2>Save edits file</h2>';
+  if (!maps.length) {
+    h += '<p>Nothing has changed yet. Move, add or remove something first.</p><div class="foot"><button class="btn primary" data-close>Close</button></div>';
+  } else {
+    const probs = maps.flatMap((m) => problemsOf(m.id).map((p) => `${m.name}: ${p.text}`));
+    h += `<p>The file holds your changes to ${plural(maps.length, 'map', 'maps')}. Send it over to have it put into the Playbook.</p>`;
+    for (const m of maps) h += `<h3>${esc(m.name)}</h3><ul>${changesOf(m.id).map((c) => `<li>${esc(c.text)}</li>`).join('')}</ul>`;
+    if (probs.length) h += `<div class="note warn"><b>Worth a look first</b><ul>${probs.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>You can still save it; these just need fixing before the app takes them.</div>`;
+    h += '<div class="foot"><button class="btn" data-close>Cancel</button><button class="btn primary" id="doExport">Save the file</button></div>';
+  }
+  $('#exportBody').innerHTML = h;
+  dlg.showModal();
+  ($('#doExport') || dlg.querySelector('[data-close]')).focus();
+});
+dlg.addEventListener('click', (e) => {
+  if (e.target === dlg || e.target.closest('[data-close]')) dlg.close();
+  if (e.target.id === 'doExport') {
+    download(`playbook-map-edits-${stamp()}.json`, new Blob([JSON.stringify(editsFile(), null, 2) + '\n'], { type: 'application/json' }));
+    dlg.close();
+    toast('Saved. Send that file over to have it put into the Playbook.');
+  }
+});
+$('#help').addEventListener('click', () => $('#helpDlg').showModal());
+$('#helpDlg').addEventListener('click', (e) => { if (e.target === $('#helpDlg') || e.target.closest('[data-close]')) $('#helpDlg').close(); });
+
+// ---------- a picture of the map ----------
+$('#png').addEventListener('click', async () => {
+  const m = mapOf(view.map), s = cur(), W = 1600, pad = W * 0.04, inner = W - 2 * pad, u = inner / 100;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = W + 64;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#15191E';
+  ctx.fillRect(0, 0, c.width, c.height);
+  if (m.art) {
+    const img = new Image();
+    img.src = m.art;
+    await img.decode().catch(() => {});
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(img, pad, pad, inner, inner);
+    ctx.globalAlpha = 1;
+  }
+  const X = (v) => pad + v * inner;
+  const colors = { orb: '#F2C14E', door: '#6FC3FF', breakable: '#FF9F43', wall: '#F48FB1', teleporter: '#C792EA', rope: '#8BE28B', zipline: '#8BE28B', drop: '#80DEEA', plant: '#FF6B74', safeplant: '#FF6B74' };
+  const drawMark = (kind, x, y, angle) => {
+    ctx.save();
+    if (angle) { ctx.translate(x, y); ctx.rotate((angle * Math.PI) / 180); ctx.translate(-x, -y); }
+    // the same shapes as markShape, in pixels
+    const bar = (h) => { ctx.roundRect(x - 1.1 * u, y - (h / 2) * u, 2.2 * u, h * u, Math.min(0.25, h / 2) * u); };
+    ctx.fillStyle = colors[kind]; ctx.strokeStyle = 'rgba(10,12,16,0.9)'; ctx.lineWidth = 0.25 * u;
+    ctx.beginPath();
+    if (kind === 'orb') { ctx.moveTo(x, y - 0.95 * u); ctx.lineTo(x + 0.95 * u, y); ctx.lineTo(x, y + 0.95 * u); ctx.lineTo(x - 0.95 * u, y); ctx.closePath(); }
+    else if (kind === 'door') bar(0.85);
+    else if (kind === 'breakable' || kind === 'wall') bar(0.5);
+    else if (kind === 'drop') ctx.roundRect(x - 0.75 * u, y - 0.75 * u, 1.5 * u, 1.5 * u, 0.15 * u);
+    else if (kind === 'teleporter') { ctx.arc(x, y, 0.85 * u, 0, 7); ctx.fillStyle = colors[kind] + '4D'; ctx.strokeStyle = colors[kind]; ctx.lineWidth = 0.35 * u; }
+    else if (kind === 'plant' || kind === 'safeplant') {
+      const r = (kind === 'plant' ? 0.95 : 0.8) * u;
+      for (let k = 0; k < 6; k++) { const a = (k * Math.PI) / 3; ctx[k ? 'lineTo' : 'moveTo'](x + r * Math.sin(a), y - r * Math.cos(a)); }
+      ctx.closePath();
+      if (kind === 'safeplant') { ctx.fillStyle = colors[kind] + '4D'; ctx.strokeStyle = colors[kind]; ctx.lineWidth = 0.35 * u; }
+    }
+    else ctx.arc(x, y, 0.6 * u, 0, 7);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  };
+  if (view.marks) for (const f of s.features) {
+    if (f.to && f.kind !== 'teleporter') { ctx.save(); ctx.strokeStyle = colors[f.kind]; ctx.globalAlpha = 0.85; ctx.lineWidth = 0.45 * u; ctx.setLineDash([u, 0.8 * u]); ctx.beginPath(); ctx.moveTo(X(f.at[0]), X(f.at[1])); ctx.lineTo(X(f.to[0]), X(f.to[1])); ctx.stroke(); ctx.restore(); }
+    drawMark(f.kind, X(f.at[0]), X(f.at[1]), f.angle);
+    if (f.to) drawMark(f.kind, X(f.to[0]), X(f.to[1]), f.angle);
+  }
+  const k = TEXT_SIZES.find((t) => t[0] === view.text)[2];
+  for (const cl of s.callouts) {
+    if (!view.dots) break;
+    ctx.beginPath(); ctx.arc(X(cl.at[0]), X(cl.at[1]), DOT * k * u, 0, 7);
+    ctx.fillStyle = '#F4F6F8'; ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.lineWidth = 0.3 * DOT * k * u; ctx.fill(); ctx.stroke();
+  }
+  if (view.names) {
+    ctx.font = `600 ${3 * k * u}px 'Atkinson Hyperlegible Next', system-ui, sans-serif`;
+    ctx.lineJoin = 'round';
+    for (const l of placeLabels(s.callouts.map((cl) => ({ text: shortName(cl.name.trim() || 'Unnamed'), x: cl.at[0] * 100, y: cl.at[1] * 100 })), k, view.dots ? DOT * k : -1, view.marks ? s.features.flatMap((f) => [f.at, ...(f.to ? [f.to] : [])]).map(P) : [], 1.2)) {
+      ctx.textAlign = l.anchor === 'middle' ? 'center' : l.anchor === 'start' ? 'left' : 'right';
+      ctx.lineWidth = 0.7 * k * u; ctx.strokeStyle = 'rgba(10,12,16,0.85)'; ctx.strokeText(l.text, X(l.x / 100), X(l.y / 100));
+      ctx.fillStyle = '#F4F6F8'; ctx.fillText(l.text, X(l.x / 100), X(l.y / 100));
+    }
+  }
+  ctx.textAlign = 'left';
+  ctx.font = `700 30px 'Atkinson Hyperlegible Next', system-ui, sans-serif`;
+  ctx.fillStyle = '#F4F6F8';
+  ctx.fillText(m.name, pad, W + 30);
+  ctx.font = `400 22px 'Atkinson Hyperlegible Next', system-ui, sans-serif`;
+  ctx.fillStyle = '#9AA5B1';
+  const n = changesOf(m.id).length;
+  ctx.fillText(`Playbook map editor · ${n ? plural(n, 'change', 'changes') : 'no changes'} · ${new Date().toLocaleDateString()}`, pad + ctx.measureText(m.name).width * 1.4 + 24, W + 30);
+  c.toBlob((b) => { if (b) { download(`playbook-${m.id}-map-${stamp()}.png`, b); toast(`Saved a picture of ${m.name}.`); } }, 'image/png');
+});
+
+// ---------- start ----------
+$('#made').textContent = `From Playbook v${DATA.version} · ${DATA.builtAt}`;
+const kept = store.get(KEY);
+if (kept && kept.maps) {
+  try {
+    const n = takeEdits(kept);
+    if (n) setTimeout(() => toast(`Picked up where you left off: changes on ${plural(n, 'map', 'maps')}.`), 300);
+  } catch { /* nothing usable kept */ }
+}
+applyTheme();
+renderTools();
+renderStatic();
+changed(true);
+if (!store.get(`${KEY}.seen`)) { store.set(`${KEY}.seen`, true); $('#helpDlg').showModal(); }
+</script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+  "name": "playbook",
+  "version": "0.5.5",
+  "private": true,
+  "description": "Offline team comp planner for VALORANT, in one HTML file.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "dev": "node tools/build.mjs --dev",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"tests/unit/**/*.test.ts\"",
+    "test:tz": "node tools/test-timezones.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "lint": "node tools/lint.mjs",
+    "e2e": "npm run build && playwright test",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "art": "node tools/prepare-art.mjs",
+    "fetch-art": "node tools/fetch-art.mjs",
+    "map-editor": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/map-editor.mjs",
+    "map-edits": "node --experimental-strip-types --disable-warning=ExperimentalWarning tools/map-edits.mjs"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.2",
+    "preact": "^10.29.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@fontsource-variable/atkinson-hyperlegible-next": "^5.3.0",
+    "@fontsource-variable/literata": "^5.3.0",
+    "@fontsource/atkinson-hyperlegible-mono": "^5.3.0",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^26.6.2",
+    "esbuild": "^0.28.2",
+    "sharp": "^0.34.5",
+    "typescript": "^7.0.2"
+  }
+}

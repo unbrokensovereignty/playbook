@@ -1,0 +1,48 @@
+name: Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Typecheck, lint, unit tests and build
+        run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - name: End-to-end tests (Chromium, light and dark)
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: test-results/
+
+  other-browsers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps firefox webkit
+      - name: End-to-end tests (Firefox and WebKit)
+        run: npx playwright test
+        env:
+          E2E_BROWSERS: others
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-other-browsers
+          path: test-results/

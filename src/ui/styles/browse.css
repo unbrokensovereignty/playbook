@@ -1,0 +1,198 @@
+/* The pages for looking things up: Home, Rankings, Agents, Maps and Saved. */
+
+/* ---------------------------------------------------------------- shared */
+
+.plain-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.list-row {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; padding: 7px 10px 7px 7px; border: 0; border-radius: var(--r);
+  background: none; color: var(--text); text-align: left; cursor: pointer; transition: background-color var(--dur-quick);
+}
+.list-row:hover { background: var(--surface-2); }
+.list-row.current { background: var(--accent-soft); }
+.list-row-text { flex: 1; display: grid; min-width: 0; }
+.list-row-text b { display: flex; align-items: center; gap: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-row-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-thumb.small { width: 56px; height: 32px; }
+.map-thumb.open.small { font-size: 1rem; }
+.map-thumb.tiny { width: 44px; height: 24px; border-radius: 5px; }
+.star-on { flex: none; color: var(--warn); }
+.star-on path { fill: currentColor; }
+.page-head .eyebrow a { gap: 2px; color: var(--text3); text-decoration: none; }
+.page-head .eyebrow a:hover { color: var(--text); }
+
+/* ---------------------------------------------------------------- home */
+
+.home { display: grid; gap: 16px; }
+.home-new { display: grid; gap: 12px; }
+.home-new-agent { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-color: var(--accent-line); background: linear-gradient(100deg, var(--accent-soft), var(--surface) 70%); }
+.home-new-agent .grow { flex: 1 1 320px; }
+.home-new-agent h2 { font-size: 1.15rem; margin-bottom: 2px; }
+.home-maps { display: grid; gap: 12px; }
+.home-list { gap: 10px; min-width: 0; }
+.party-cards { gap: 0; }
+.party-card { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-top: 1px solid var(--line); }
+.party-card:first-child { border-top: 0; }
+.party-pools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.party-pool { display: inline-flex; align-items: center; gap: 2px; min-height: 30px; padding: 3px 8px 3px 4px; border-radius: var(--r-sm); background: var(--surface-2); }
+
+/* ---------------------------------------------------------------- rankings */
+
+.rank-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; padding: 14px 16px; }
+.rank-controls .select { width: auto; min-width: 12em; }
+.rank-tabs { margin-top: 18px; align-items: flex-end; }
+.rank-tabs .tabs { border-bottom: 0; margin-bottom: 0; }
+.rank-where { margin-top: 14px; font-size: 1.1rem; }
+
+.tier-list { display: grid; gap: 8px; }
+.tier-row { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.tier.tier-big { width: 44px; height: 44px; border-radius: 10px; font-size: 1.35rem; }
+.tier-agents { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+.tier-agent {
+  display: grid; justify-items: center; gap: 2px; width: 80px; padding: 6px 4px; border: 0; border-radius: var(--r);
+  background: none; color: var(--text); cursor: pointer; transition: background-color var(--dur-quick);
+}
+.tier-agent:hover { background: var(--surface-2); }
+.tier-agent-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.82rem; font-weight: 650; }
+.tier-agent.mine, .tier-agent.mine:hover { background: var(--accent-soft); }
+.tier-agent { position: relative; }
+.tier-mine { position: absolute; top: 4px; right: 8px; }
+.tier-empty { padding: 14px 6px; }
+.tier-agent-unsure { color: var(--text2); font-size: 0.7rem; font-weight: 600; line-height: 1.2; }
+
+.heat-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.heat { border-collapse: separate; border-spacing: 3px; min-width: 100%; font-size: 0.86rem; }
+.heat th, .heat td { padding: 4px 6px; text-align: center; vertical-align: middle; }
+.heat thead th { vertical-align: bottom; color: var(--text2); font-size: 0.78rem; font-weight: 650; }
+.heat .heat-agent { position: sticky; left: 0; z-index: 1; background: var(--surface); text-align: left; }
+.heat-map { display: grid; justify-items: center; gap: 4px; padding: 2px; border: 0; border-radius: var(--r-sm); background: none; color: inherit; font: inherit; cursor: pointer; }
+.heat-map:hover { color: var(--text); }
+.heat-name { display: flex; align-items: center; gap: 8px; padding: 2px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text); font: inherit; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.heat-name .role-icon { color: var(--text3); }
+.heat-cell { min-width: 44px; border-radius: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.heat-cell.wait { background: var(--surface-2); }
+.heat-s { background: var(--tier-s-soft); color: var(--tier-s-text); }
+.heat-a { background: var(--tier-a-soft); color: var(--tier-a-text); }
+.heat-b { background: var(--tier-b-soft); color: var(--tier-b-text); }
+.heat-c { background: var(--tier-c-soft); color: var(--tier-c-text); }
+.heat-d { background: var(--tier-d-soft); color: var(--tier-d-text); }
+.heat-cell.unsure { outline: 1.5px dashed currentColor; outline-offset: -4px; }
+.heat-avg { color: var(--text2); font-weight: 700; }
+
+/* ---------------------------------------------------------------- agents */
+
+.agents-page { gap: 20px; }
+.agent-role-group h2 { gap: 10px; margin-bottom: 10px; align-items: baseline; }
+.agent-role-group h2 .role-icon { align-self: center; }
+.agent-role-group h2 .muted { font-family: var(--font-ui); font-size: 0.9rem; font-weight: 400; }
+.agent-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.agent-card {
+  display: flex; align-items: center; gap: 12px; width: 100%; height: 100%; padding: 10px; border: 1.5px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); color: var(--text); text-align: left; cursor: pointer; transition: border-color var(--dur-quick), box-shadow var(--dur-quick), transform var(--dur-quick) var(--ease);
+}
+.agent-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.agent-card-text { display: grid; gap: 2px; min-width: 0; }
+.agent-card-text small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+.agent-title { gap: 14px; }
+.agent-sub { gap: 8px 14px; }
+.agent-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@container page (min-width: 1100px) { .agent-detail { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); } }
+.agent-about { margin: 0; color: var(--text2); line-height: 1.55; }
+.kit { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.kit li { display: flex; gap: 12px; align-items: flex-start; }
+.kit li p { margin: 2px 0 0; line-height: 1.45; }
+.kit li p b { color: var(--text); font-weight: 650; }
+/* the game's marks: what an ability does to enemies, and what it gives the agent's side */
+.kit-fx { font-weight: 650; }
+.kit-fx.enemy { color: var(--bad-text); }
+.kit-fx.ally { color: var(--good-text); }
+.kit-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--r); background: var(--surface-2); color: var(--text); }
+.kit-key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; background: var(--surface-3); color: var(--text2); font-size: 0.72rem; font-weight: 700; vertical-align: 1px; }
+.agent-strengths { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.agent-strengths th, .agent-strengths td { padding: 6px 10px 6px 0; border-top: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.agent-strengths tr:first-child th, .agent-strengths tr:first-child td { border-top: 0; }
+.agent-strengths th { width: 1%; padding-right: 20px; font-weight: 650; white-space: nowrap; }
+.agent-strengths td:nth-child(2) { width: 32%; }
+.pairs { gap: 2px; }
+.pair-row { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 6px 8px 6px 4px; border: 0; border-radius: var(--r); background: none; color: var(--text); text-align: left; cursor: pointer; }
+.pair-row:hover { background: var(--surface-2); }
+.pair-row small { display: block; margin-top: 1px; line-height: 1.4; }
+.by-rank { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.by-rank-cell {
+  display: grid; gap: 4px; width: 100%; min-width: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r);
+  background: none; color: var(--text); text-align: left; cursor: pointer; transition: background-color var(--dur-quick);
+}
+.by-rank-cell:hover { background: var(--surface-2); }
+.by-rank-cell.current { border-color: var(--accent-line); background: var(--accent-soft); }
+.by-rank-cell { position: relative; }
+.by-rank-cell > .small { color: var(--text2); font-weight: 600; }
+.home-list h3, .agent-detail h3 { gap: 6px; font-size: 0.95rem; }
+
+/* ---------------------------------------------------------------- maps */
+
+.map-cards .map-tile-text small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+.map-detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@container page (min-width: 1100px) { .map-detail { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); } }
+.map-big { width: 100%; max-width: min(980px, calc(100vh - 140px)); }
+.map-view { max-width: 980px; gap: 10px; }
+.map-view-toggles { gap: 8px 20px; }
+.map-view .segmented .size-s { font-size: 0.8em; }
+.map-view .segmented .size-m { font-size: 1em; }
+.map-view .segmented .size-l { font-size: 1.2em; }
+.map-view .segmented .size-xl { font-size: 1.4em; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.map-legend li { gap: 6px; }
+.map-marks summary { cursor: pointer; font-weight: 600; }
+.map-marks-list { gap: 6px; margin-top: 8px; }
+.map-marks-list li { gap: 8px; align-items: flex-start; }
+.map-marks-list .feature-swatch { flex: none; margin-top: 2px; }
+.sites { gap: 0; }
+.sites li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.sites li:first-child { border-top: 0; padding-top: 0; }
+.sites p { margin: 0; line-height: 1.45; }
+.site-id { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-text); font-weight: 800; }
+.pro-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.pro-picks li { display: grid; justify-items: center; gap: 2px; }
+.pro-comps { gap: 6px; }
+.map-side { margin: 28px 0 12px; }
+.map-tips { margin-bottom: 12px; }
+.map-agent-tips { margin: 20px 0 8px; }
+.map-agent-tips .tips { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.map-agent-tips .tips li { align-content: start; }
+.map-users { display: block; margin-top: 4px; }
+.map-plays { margin-top: 28px; }
+.map-plays p { margin: 0; }
+.map-plays .team-icons { margin: 0 4px; }
+.map-detail + .map-side h2 { font-size: 1.2rem; }
+.map-page-plays { margin-top: 24px; }
+
+/* ---------------------------------------------------------------- saved */
+
+.saved-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@container page (min-width: 1000px) { .saved-layout { grid-template-columns: 340px minmax(0, 1fr); } }
+.saved-list { padding: 6px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.saved-list .list-row-text { gap: 2px; }
+.saved-list .list-row-text b { white-space: normal; }
+.saved-list .team-icons { margin-top: 4px; }
+.saved-pick { padding: 24px; }
+.plan-detail { gap: 14px; }
+.plan-head { align-items: flex-start; }
+.plan-head h2 { margin-bottom: 2px; }
+.plan-team { gap: 14px; }
+.party-list { gap: 10px; }
+.party-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.party-players { gap: 4px; }
+.party-players li { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.party-player-name { min-width: 8em; font-weight: 600; }
+.party-actions { flex: none; }
+.item-list { gap: 10px; }
+.item-row { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+.item-actions { flex: none; }
+.party-editor .segmented { justify-self: start; width: max-content; }
+.party-player { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); }
+
+/* ---------------------------------------------------------------- gallery */
+
+.gallery-minimap { max-width: 640px; }
+.my-play-row { align-items: center; }
+.my-play-thumb { flex: none; width: 96px; height: 56px; overflow: hidden; border-radius: var(--r); }
+.my-play-thumb > * { width: 100%; height: 100%; object-fit: cover; }
