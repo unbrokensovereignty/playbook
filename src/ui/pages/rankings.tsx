@@ -2,9 +2,10 @@
  * Rankings: tier lists of agents, the top comps, and every agent's fit on every map, for a map,
  * side and rank of your choosing (a five-stack with nothing else fixed).
  */
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
+import type { SituationAnswer } from '../../core/engine/plan.ts';
 import { PageHead } from '../shell.tsx';
-import { Segmented, Select, Tabs, Toggle } from '../components/controls.tsx';
+import { Segmented, Select, Tabs, tabIdOf, Toggle } from '../components/controls.tsx';
 import { AgentIcon, MapThumb, RoleIcon } from '../art.tsx';
 import { Icon } from '../icons.tsx';
 import { go, useSettings, useView } from '../state.ts';
@@ -21,6 +22,7 @@ import { ROLES, type Role } from '../../core/kb/roles.ts';
 import type { SidePick, Situation } from '../../core/engine/model.ts';
 import type { AgentAnswer } from '../../core/engine/plan.ts';
 import { newQuery } from '../../core/engine/query.ts';
+import { fitValue } from '../../core/engine/summary.ts';
 import { unsureWords } from '../../core/engine/sure.ts';
 import { TIERS, tierOf } from '../../core/engine/weights.ts';
 import { listJoin } from '../../core/text.ts';
@@ -33,7 +35,7 @@ type RoleFilter = Role | 'all';
 const isSide = (v: string): v is SidePick => v === 'both' || v === 'attack' || v === 'defense';
 const nameOf = (id: string) => agentById(id)?.name ?? id;
 
-/** Agents grouped into tiers, S first, with the agents you play marked, an arrow on those whose tier moved, and those less sure saying so. */
+/** Agents grouped into tiers, S first, with the agents you play marked and those less sure saying so. */
 function TierList({ s, agents }: { s: Situation; agents: readonly AgentAnswer[] }) {
   const { showNumbers: numbers, myAgents: mine } = useSettings();
   return (
@@ -47,7 +49,7 @@ function TierList({ s, agents }: { s: Situation; agents: readonly AgentAnswer[] 
               {here.map((a) => {
                 return (
                   <li key={a.id}>
-                    <button type="button" class={`tier-agent${mine.includes(a.id) ? ' mine' : ''}`} data-tip={`${nameOf(a.id)}: fit ${Math.round(a.fit)}${mine.includes(a.id) ? ' (one of your agents)' : ''}${a.edge ? `, ${edgeWords(a.id, a.edge)}` : ''}.${a.unsure ? ` ${unsureWords(s, a.id, a.unsure)}` : ''}`} onClick={() => { play('page'); go('agents', a.id); }}>
+                    <button type="button" class={`tier-agent${mine.includes(a.id) ? ' mine' : ''}`} data-tip={`${nameOf(a.id)}${numbers ? `: fit ${fitValue(a.fit)}` : ''}${mine.includes(a.id) ? ' (one of your agents)' : ''}${a.edge ? `, ${edgeWords(a.id, a.edge, false, numbers)}` : ''}.${a.unsure ? ` ${unsureWords(s, a.id, a.unsure, numbers)}` : ''}`} onClick={() => { play('page'); go('agents', a.id); }}>
                       <AgentIcon id={a.id} size={48} />
                       {mine.includes(a.id) && <Icon name="star" size={14} class="star-on tier-mine" />}
                       <span class="tier-agent-name">{nameOf(a.id)}</span>
@@ -70,25 +72,40 @@ function TierList({ s, agents }: { s: Situation; agents: readonly AgentAnswer[] 
 function ByMap({ side, rank, newAgents, all, role }: { side: SidePick; rank: RankId; newAgents: boolean; all: boolean; role: RoleFilter }) {
   const numbers = useSettings().showNumbers;
   const maps = all ? MAPS : POOL;
-  const answers = maps.map((m) => answerFor({ map: m.id, side, rank, sites: [] }, newAgents));
-  const ready = answers.filter((a) => !!a).length;
+  const asked = maps.map((m) => answerFor({ map: m.id, side, rank, sites: [] }, newAgents));
+  const ready = asked.filter((a) => !!a).length;
+  // the table changes once, when every map is in: until then the last full table stays (dimmed), so
+  // rows don't reshuffle as each map arrives. With nothing to show yet, rows stay in name order.
+  const last = useRef<(SituationAnswer | undefined)[] | null>(null);
+  const complete = ready === maps.length;
+  if (complete) last.current = asked;
+  const answers = complete ? asked : last.current?.length === maps.length ? last.current : asked;
+  const stale = !complete && answers !== asked;
+  const sorted = answers.every((a) => !!a);
+  const order = useRef<string[]>([]);
+  const place = (id: string) => { const k = order.current.indexOf(id); return k < 0 ? order.current.length : k; };
   const fitOn = (k: number, id: string) => answers[k]?.agents.find((a) => a.id === id)?.fit;
   const unsureOn = (k: number, id: string) => {
     const u = answers[k]?.agents.find((a) => a.id === id)?.unsure;
-    return u && unsureWords(answers[k]!.situation, id, u);
+    return u && unsureWords(answers[k]!.situation, id, u, numbers);
   };
   const rows = AGENTS_BY_NAME
     .filter((a) => (newAgents || !a.estimate) && (role === 'all' || a.role === role))
     .map((a) => {
       const fits = maps.map((_, k) => fitOn(k, a.id));
       const known = fits.filter((f): f is number => f !== undefined);
-      return { a, fits, avg: known.length ? mean(known) : -1 };
+      // the average waits for every map, so a partial one never shows
+      return { a, fits, avg: known.length === maps.length ? mean(known) : -1 };
     })
-    .sort((x, y) => y.avg - x.avg || x.a.name.localeCompare(y.a.name));
+    // until every map is in, rows keep the last full table's order (name order the first time), so a
+    // change of map count, like All maps, reorders them once rather than twice
+    .sort((x, y) => (sorted ? y.avg - x.avg : place(x.a.id) - place(y.a.id)) || x.a.name.localeCompare(y.a.name));
+  if (sorted) order.current = rows.map((r) => r.a.id);
   return (
     <div class="stack">
-      {ready < maps.length && <p class="row muted small" role="status"><span class="spinner" aria-hidden="true" />Working out {maps.length - ready} of {maps.length} maps…</p>}
-      <div class="heat-wrap">
+      {/* always there, so the table under it doesn't move when the work is done; its spinner goes, so nothing hidden keeps turning */}
+      <p class="row muted small heat-status" role="status" style={{ visibility: complete ? 'hidden' : undefined }}>{!complete && <span class="spinner" aria-hidden="true" />}Working out {maps.length - ready} of {maps.length} maps…</p>
+      <div class={`heat-wrap${stale ? ' stale' : ''}`}>
         <table class="heat">
           <thead>
             <tr>
@@ -139,10 +156,15 @@ export function RankingsPage(_p: PageProps) {
   const newAgents = fresh === 'yes';
   const situation: Situation = { map, side, rank, sites: [] };
   // the by-map table works its maps out in the background; the rest is one situation, answered now
-  const ans = tab === 'maps' ? undefined : answerNow(situation, newAgents);
+  // worked out beside the page, so a change of side or rank never holds up the page: the last lists
+  // stay until the new ones are in (a moment). Only the very first has to be worked out here.
+  const shown = useRef<SituationAnswer | undefined>(undefined);
+  const ready = tab === 'maps' ? undefined : answerFor(situation, newAgents);
+  if (ready) shown.current = ready;
+  const ans = tab === 'maps' ? undefined : ready ?? shown.current ?? (shown.current = answerNow(situation, newAgents));
   const q = { ...newQuery(rank, newAgents), map, side };
   const agents = ans ? ans.agents.filter((a) => role === 'all' || agentById(a.id)?.role === role) : [];
-  const where = `${tab === 'maps' ? 'Every map' : mapWord(map)}, ${sideWord(side).toLowerCase()}, ${rankWord(rank)}`;
+  const where = `${tab === 'maps' ? (allMaps === 'yes' ? 'Every map' : 'Every map in the pool') : mapWord(map)}, ${sideWord(side).toLowerCase()}, ${rankWord(rank)}`;
   return (
     <>
       <PageHead title="Rankings">Tier lists for a five-stack. Change the map, side or rank to see how they move.</PageHead>
@@ -161,7 +183,7 @@ export function RankingsPage(_p: PageProps) {
         {tab !== 'comps' && <Segmented<RoleFilter> label="Role" value={role} onChange={setRole} options={[['all', 'All'], ...ROLES.map((r) => [r.id, r.plural] as const)]} />}
       </div>
       <h2 class="rank-where">{where}</h2>
-      <div class="tab-body" key={tab}>
+      <div class="tab-body" key={tab} role="tabpanel" aria-labelledby={tabIdOf('Rankings', tab)}>
         {tab === 'agents' && ans && <TierList s={situation} agents={agents} />}
         {tab === 'comps' && ans && (
           <ol class="comps">

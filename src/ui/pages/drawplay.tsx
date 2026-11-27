@@ -4,16 +4,17 @@
  * pros' usual comp, so you see who'd do each job and where their utility lands, as it will look
  * beside the built-in plays. Saved, it's kept with your plans and backups (core/saved.ts).
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { PageHead } from '../shell.tsx';
 import { Button, Empty, Field, IconButton, Segmented, Select, TextInput } from '../components/controls.tsx';
 import { confirm } from '../components/overlays.tsx';
 import { Minimap, ROUTE_COLORS, type Route } from '../components/minimap.tsx';
 import { AgentIcon } from '../art.tsx';
 import { Icon } from '../icons.tsx';
-import { data, go, safely, toast, watch } from '../state.ts';
+import { data, dismissToast, editsText, go, overlayOpen, safely, toast, watch } from '../state.ts';
 import { play } from '../sound.ts';
 import { playsLink } from '../myplays.ts';
+import { pageHistory } from '../undo.ts';
 import { agentById } from '../../core/kb/agents.ts';
 import { spotName, type MapInfo, type Side, type SiteId } from '../../core/kb/maps.ts';
 import { JOBS, kindName, MOMENTS, momentName, SIDE_KINDS, whenOf, type Job, type Moment, type PlayKind } from '../../core/kb/plays.ts';
@@ -25,8 +26,14 @@ import { listJoin } from '../../core/text.ts';
 interface Draft { side: Side; site: SiteId | null; kind: PlayKind; name: string; about: string; steps: MyStep[] }
 
 const newStep = (): MyStep => ({ jobs: [], route: [], text: '', when: null });
+/** Each step's key while it's drawn, so its controls (and focus) go with it when it moves or one before it goes. */
+const stepKeys = new WeakMap<MyStep, number>();
+let stepSeq = 0;
+const keyOfStep = (s: MyStep): number => { let k = stepKeys.get(s); if (k === undefined) stepKeys.set(s, (k = ++stepSeq)); return k; };
 /** Drafts left without saving or cancelling (you went to another page), until the tab closes. */
 const kept = new Map<string, Draft>();
+// they go when the tab closes or reloads, so the browser asks first, as Cancel does
+if (typeof addEventListener === 'function') addEventListener('beforeunload', (e) => { if (kept.size) e.preventDefault(); });
 
 export function DrawPlayPage({ m, id }: { m: MapInfo; id: string }) {
   const r = watch('meta');
@@ -39,7 +46,7 @@ export function DrawPlayPage({ m, id }: { m: MapInfo; id: string }) {
       </>
     );
   }
-  return <Drawing m={m} id={id} key={id} />;
+  return <Drawing m={m} id={id} key={`${m.id}|${id}`} />;
 }
 
 function Drawing({ m, id }: { m: MapInfo; id: string }) {
@@ -52,8 +59,71 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
   const [picked] = useState(() => kept.has(key));
   const [at, setAt] = useState(0);
   const [dirty, setDirty] = useState(() => kept.has(key));
-  const set = (patch: Partial<Draft>) => { const next = { ...d, ...patch }; setDraft(next); setDirty(true); kept.set(key, next); };
-  const setStep = (i: number, patch: Partial<MyStep>) => set({ steps: d.steps.map((s, k) => (k === i ? { ...s, ...patch } : s)) });
+  // the drawing's own undo and redo: Ctrl Z on this page takes back the last change to the drawing (typing in
+  // one field counts as one change), and Ctrl Shift Z or Ctrl Y puts it back, instead of an unrelated change to
+  // your saved data. Once the drawing has been changed, the keys stop at its start rather than going on to the app's
+  const past = useRef<Draft[]>([]);
+  const future = useRef<Draft[]>([]);
+  const typing = useRef<string | null>(null);
+  const now = useRef(d);
+  now.current = d;
+  // a drawing back where it started (the name typed and cleared, every change undone) has nothing to
+  // lose: it isn't kept, so the tab closes without asking and Cancel doesn't ask either
+  const startsAs = useMemo(() => JSON.stringify(start()), []);
+  const put = (next: Draft) => {
+    now.current = next; setDraft(next); setDirty(true);
+    if (JSON.stringify(next) === startsAs) kept.delete(key); else kept.set(key, next);
+  };
+  const set = (patch: Partial<Draft>, field: string | null = null) => {
+    if (!field || field !== typing.current) past.current = [...past.current.slice(-49), now.current];
+    typing.current = field; future.current = [];
+    put({ ...now.current, ...patch });
+  };
+  const setStep = (i: number, patch: Partial<MyStep>, field: string | null = null) => set({ steps: now.current.steps.map((s, k) => { if (k !== i) return s; const next = { ...s, ...patch }; stepKeys.set(next, keyOfStep(s)); return next; }) }, field);
+  // an undo that takes away the step holding focus (one you'd just added) leaves focus on the steps, not the page
+  const refocus = useRef(false);
+  const step1 = (from: { current: Draft[] }, to: { current: Draft[] }) => { const prev = from.current.at(-1); if (!prev) return false; from.current = from.current.slice(0, -1); to.current = [...to.current, now.current]; typing.current = null; refocus.current = !!document.activeElement?.closest('.draw-step'); put(prev); play('tick'); return true; };
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const a = document.activeElement;
+    if (a && a !== document.body && a.isConnected) return;
+    (document.querySelector<HTMLElement>('.draw-step.on button:not(:disabled)') ?? document.querySelector<HTMLElement>('.draw-steps > .row button:not(:disabled)'))?.focus({ preventScroll: true });
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || overlayOpen() || editsText(e.target)) return;
+      const k = e.key.toLowerCase();
+      const redo = (k === 'z' && e.shiftKey) || (k === 'y' && !e.shiftKey);
+      if (!redo && (k !== 'z' || e.shiftKey)) return;
+      const done = redo ? step1(future, past) : step1(past, future);
+      // nothing left in the drawing: the key stops here once you've drawn, instead of going on to your saved data
+      if (done || dirty) { e.preventDefault(); e.stopImmediatePropagation(); }
+      if (!done && dirty && !e.repeat) toast(redo ? 'Nothing to redo.' : 'Nothing to undo.');
+    };
+    addEventListener('keydown', onKey, true);
+    return () => removeEventListener('keydown', onKey, true);
+  });
+  // once you've drawn, the sidebar's Undo and Redo and Search's are the drawing's too, as the keys are
+  useEffect(() => {
+    pageHistory.value = dirty ? {
+      undo: () => { if (!step1(past, future)) toast('Nothing to undo.'); },
+      redo: () => { if (!step1(future, past)) toast('Nothing to redo.'); },
+      canUndo: past.current.length > 0, canRedo: future.current.length > 0,
+    } : null;
+  });
+  useEffect(() => () => { pageHistory.value = null; }, []);
+  // the message after taking out a step: its Undo puts that step back while it still can (the step isn't back
+  // already, by Ctrl Z or as an edited copy, and there's room for it and its jobs). Once it can't, the message goes
+  const out = useRef<{ id: number; s: MyStep } | null>(null);
+  const canPutBack = (s: MyStep) => { const c = now.current.steps; return !c.some((x) => keyOfStep(x) === keyOfStep(s)) && c.length < LIMITS.steps && c.reduce((n, x) => n + x.jobs.length, 0) + s.jobs.length <= PLAY_JOBS; };
+  useEffect(() => { const o = out.current; if (o && !canPutBack(o.s)) { dismissToast(o.id); out.current = null; } }, [d]);
+  const takeOut = (i: number, s: MyStep) => {
+    set({ steps: d.steps.filter((_, k) => k !== i) });
+    if (!s.jobs.length && !s.route.length && !s.text) return;
+    const id = toast(`Took out step ${i + 1}.`, { action: { label: 'Undo', live: () => canPutBack(s), run: () => { out.current = null; if (canPutBack(s)) { const c = now.current.steps; set({ steps: [...c.slice(0, i), s, ...c.slice(i)] }); } } } });
+    out.current = { id, s };
+  };
   const used = d.steps.reduce((n, s) => n + s.jobs.length, 0);
   const step = d.steps[Math.min(at, d.steps.length - 1)]!;
 
@@ -97,7 +167,7 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
     leave(playsLink(m.id, out.id));
   };
   const cancel = async () => {
-    if (dirty && !(await confirm({ title: 'Leave without saving?', body: 'What you drew since you last saved goes.', yes: 'Leave it', no: 'Keep drawing' }))) return;
+    if (kept.has(key) && !(await confirm({ title: 'Leave without saving?', body: 'What you drew since you last saved goes.', yes: 'Leave it', no: 'Keep drawing' }))) return;
     leave(was ? playsLink(m.id, was.id) : playsLink(m.id));
   };
   const remove = () => {
@@ -132,7 +202,7 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
       {picked && <p class="small muted">Picking up where you left off.</p>}
       <div class="panel row wrap draw-about" data-tour="draw-about">
         <Field label="Name" for="draw-name">
-          <TextInput id="draw-name" value={d.name} maxLength={LIMITS.name} placeholder="Like “Fast B through Main”" onInput={(v) => set({ name: v })} />
+          <TextInput id="draw-name" value={d.name} maxLength={LIMITS.name} placeholder="Like “Fast B through Main”" onInput={(v) => set({ name: v }, 'name')} />
         </Field>
         <Field label="Side">
           <Segmented<Side> label="Side" value={d.side} onChange={(v) => set({ side: v, kind: SIDE_KINDS[v].includes(d.kind) ? d.kind : SIDE_KINDS[v][0]! })} options={[['attack', 'Attack'], ['defense', 'Defense']]} />
@@ -144,7 +214,7 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
           <Select<PlayKind> id="draw-kind" label="Kind of play" value={d.kind} onChange={(v) => set({ kind: v })} options={SIDE_KINDS[d.side].map((k) => [k, kindName(k)] as const)} />
         </Field>
         <Field label="What it’s for (if you like)" for="draw-about">
-          <TextInput id="draw-about" value={d.about} maxLength={LIMITS.note} placeholder="Like “For when they stack A”" onInput={(v) => set({ about: v })} />
+          <TextInput id="draw-about" value={d.about} maxLength={LIMITS.note} placeholder="Like “For when they stack A”" onInput={(v) => set({ about: v }, 'about')} />
         </Field>
       </div>
       <div class="draw-play">
@@ -158,13 +228,13 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
               const f = filledOf(i);
               const free = PLAY_JOBS - used;
               return (
-                <li key={i} class={`draw-step${i === at ? ' on' : ''}`} onFocusIn={() => setAt(i)} onClick={() => setAt(i)}>
+                <li key={keyOfStep(s)} class={`draw-step${i === at ? ' on' : ''}`} onFocusIn={() => setAt(i)} onClick={() => setAt(i)}>
                   <div class="row-between">
                     <h2 class="row"><span class={`step-dot ${color(i)}`} aria-hidden="true">{i + 1}</span>Step {i + 1}</h2>
                     <span class="row">
                       <IconButton icon="move-up" label={`Move step ${i + 1} up`} size="sm" disabled={i === 0} onClick={() => move(i, -1)} />
                       <IconButton icon="move-down" label={`Move step ${i + 1} down`} size="sm" disabled={i === d.steps.length - 1} onClick={() => move(i, 1)} />
-                      <IconButton icon="trash" label={`Remove step ${i + 1}`} size="sm" sound="remove" disabled={d.steps.length === 1} onClick={() => set({ steps: d.steps.filter((_, k) => k !== i) })} />
+                      <IconButton icon="trash" label={`Remove step ${i + 1}`} size="sm" sound="remove" disabled={d.steps.length === 1} onClick={(e) => { if (e.detail > 1) return; takeOut(i, s); }} />
                     </span>
                   </div>
                   <div class="stack draw-jobs" role="group" aria-label={`Jobs in step ${i + 1}, one or two`}>
@@ -179,13 +249,13 @@ function Drawing({ m, id }: { m: MapInfo; id: string }) {
                   <div class="stack">
                     <span class="small muted">Route</span>
                     <div class="row wrap draw-route">
-                      <span class="grow">{s.route.length ? s.route.map(spotName).join(' → ') : <span class="muted">{i === at ? 'Click the map, or choose a spot' : 'No spots yet'}</span>}</span>
+                      <span class="grow">{s.route.length ? s.route.map((c) => spotName(c).replace(/ /g, '\u00A0')).join(' → ') : <span class="muted">{i === at ? 'Click the map, or choose a spot' : 'No spots yet'}</span>}</span>
                       <Select<string> label={`Add a spot to step ${i + 1}`} value="" onChange={(v) => { setAt(i); if (v && s.route.at(-1) !== v && s.route.length < LIMITS.route) setStep(i, { route: [...s.route, v] }); }} options={[['', 'Add a spot…'], ...m.callouts.map((c) => [c.name, spotName(c.name)] as const).sort((a, b) => a[1].localeCompare(b[1]))]} />
                       <IconButton icon="undo" label={`Take back the last spot of step ${i + 1}`} size="sm" disabled={!s.route.length} onClick={() => setStep(i, { route: s.route.slice(0, -1) })} />
                     </div>
                   </div>
                   <Field label="What they do" for={`draw-text-${i}`}>
-                    <TextInput id={`draw-text-${i}`} value={s.text} maxLength={LIMITS.line} placeholder="Like “Smoke A Tower and A Link, then hold A Main”" onInput={(v) => setStep(i, { text: v })} />
+                    <TextInput id={`draw-text-${i}`} value={s.text} maxLength={LIMITS.line} placeholder="Like “Smoke A Tower and A Link, then hold A Main”" onInput={(v) => setStep(i, { text: v }, `text-${keyOfStep(s)}`)} />
                   </Field>
                   <div class="row wrap draw-when">
                     <span class="small muted">When</span>

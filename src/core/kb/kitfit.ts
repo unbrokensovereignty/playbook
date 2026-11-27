@@ -189,7 +189,7 @@ export const KIT_RULES: readonly KitRule[] = [
   },
   {
     agent: 'viper', map: 'breeze', caps: 'smoke +.27', via: 'E', skill: -0.1,
-    why: 'Viper’s Toxic Screen does the work of several smokes on Breeze, since one wall cuts off the long sightlines across a whole site, and even a rough one does the job.',
+    why: 'Viper’s Toxic Screen does the work of several smokes on Breeze. One wall cuts the long sightlines across a whole site, even when it isn’t placed perfectly.',
   },
   {
     agent: 'viper', map: 'corrode', site: 'A', side: 'attack', caps: 'smoke +.2', via: 'E',
@@ -210,7 +210,7 @@ export const KIT_RULES: readonly KitRule[] = [
   },
   {
     agent: 'sova', space: 'open', caps: 'recon +.1; retake +.1',
-    why: 'Sova’s Recon Bolt and Owl Drone see across {map}’s long, open ground, where one bolt can show a whole site, or a whole retake.',
+    why: 'Sova’s Recon Bolt and Owl Drone see across {map}’s long, open ground, where one bolt can show a whole site on a hit, or the whole post-plant before a retake.',
   },
   {
     agent: 'fade', space: 'open', caps: 'recon -.1; disrupt -.05',

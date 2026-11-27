@@ -95,7 +95,7 @@ function Strengths({ a }: { a: Agent }) {
             return (
               <tr key={d}>
                 <th scope="row" data-tip={DIM_INFO[d].blurb}>{DIM_INFO[d].name}</th>
-                <td><Bar value={v} size="thin" tone={v >= 0.75 ? 'good' : undefined} label={`${DIM_INFO[d].name}: ${Math.round(v * 100)} out of 100`} /></td>
+                <td><Bar value={v} size="thin" label={`${DIM_INFO[d].name}: ${Math.round(v * 100)} out of 100`} /></td>
                 <td class="muted small">{via.length ? listJoin(via) : (a.via[d] ?? '').includes('G') ? 'Gun play' : ''}</td>
               </tr>
             );
@@ -109,10 +109,11 @@ function Strengths({ a }: { a: Agent }) {
 
 
 function BestMaps({ a, rank, newAgents }: { a: Agent; rank: RankId; newAgents: boolean }) {
+  const numbers = useSettings().showNumbers;
   const rows = MAPS.map((m) => {
     const s: Situation = { map: m.id, side: 'both', rank, sites: [] };
     const x = answerFor(s, newAgents)?.agents.find((y) => y.id === a.id);
-    return { m, fit: x?.fit, unsure: x?.unsure && unsureWords(s, a.id, x.unsure) };
+    return { m, fit: x?.fit, unsure: x?.unsure && unsureWords(s, a.id, x.unsure, numbers) };
   });
   const ready = rows.every((r) => r.fit !== undefined);
   // best first; maps where the agent fits as well (many, for an agent in the best comp on several)
@@ -121,7 +122,7 @@ function BestMaps({ a, rank, newAgents }: { a: Agent; rank: RankId; newAgents: b
   const sorted = ready ? [...rows].sort((x, y) => Math.round(y.fit!) - Math.round(x.fit!) || pro(y.m.id) - pro(x.m.id)) : rows;
   return (
     <section class="panel stack" data-tour="agent-best-maps">
-      <div class="row-between"><h2>Best maps</h2>{!ready && <span class="spinner" aria-label="Working it out" />}</div>
+      <div class="row-between"><h2>Best maps</h2>{!ready && <span class="spinner" role="img" aria-label="Working it out" />}</div>
       <ul class="plain-list best-maps">
         {sorted.map(({ m, fit, unsure }) => (
           <li key={m.id}>
@@ -139,15 +140,16 @@ function BestMaps({ a, rank, newAgents }: { a: Agent; rank: RankId; newAgents: b
 }
 
 function ByRank({ a, rank, newAgents }: { a: Agent; rank: RankId; newAgents: boolean }) {
+  const numbers = useSettings().showNumbers;
   const rows = RANKS.map((r) => {
     const s: Situation = { map: 'any', side: 'both', rank: r.id, sites: [] };
     const x = answerFor(s, newAgents)?.agents.find((y) => y.id === a.id);
-    return { r, fit: x?.fit, unsure: x?.unsure && unsureWords(s, a.id, x.unsure) };
+    return { r, fit: x?.fit, unsure: x?.unsure && unsureWords(s, a.id, x.unsure, numbers) };
   });
   const ready = rows.every((x) => x.fit !== undefined);
   return (
     <section class="panel stack" data-tour="agent-by-rank">
-      <div class="row-between"><h2>By rank</h2>{!ready && <span class="spinner" aria-label="Working it out" />}</div>
+      <div class="row-between"><h2>By rank</h2>{!ready && <span class="spinner" role="img" aria-label="Working it out" />}</div>
       <ul class="plain-list by-rank">
         {rows.map(({ r, fit, unsure }) => (
           <li key={r.id}>
@@ -197,7 +199,7 @@ function ProDuos({ a }: { a: Agent }) {
   return (
     <section class="panel stack" data-tour="agent-pro-duos">
       <h2>With pros</h2>
-      <p class="small muted">Who pro teams played {a.name} with at this year’s events, out of the {plural(maps, 'map')} they picked {a.name}.</p>
+      <p class="small muted">Who pro teams played {a.name} with at this year’s events, out of the {plural(maps, 'time')} a team picked {a.name}.</p>
       <ul class="plain-list pairs">
         {duos.map((d) => {
           const o = agentById(d.id);
@@ -205,7 +207,7 @@ function ProDuos({ a }: { a: Agent }) {
             <li key={d.id}>
               <button type="button" class="pair-row" onClick={() => go('agents', o.id)}>
                 <AgentIcon id={o.id} size={32} />
-                <span><b>{o.name}</b><small class="muted">On {Math.round(d.share * 100)}% of those maps ({d.maps} of {maps})</small></span>
+                <span><b>{o.name}</b><small class="muted">In {Math.round(d.share * 100)}% of those ({d.maps} of {maps})</small></span>
               </button>
             </li>
           );
@@ -276,7 +278,7 @@ function AgentPage({ a }: { a: Agent }) {
         actions={<Button kind="primary" icon="planner" onClick={() => planWith({ include: [a.id], newAgents })}>Plan with {a.name}</Button>}>
         <span class="row wrap agent-sub">
           <span class="row"><RoleIcon role={a.role} size={16} />{roleOf(a.role).name}</span>
-          {a.estimate && <Badge tone="accent" icon="sparkle">New, so the numbers are early estimates</Badge>}
+          {a.estimate && <Badge tone="accent" icon="info">New, so the numbers are early estimates</Badge>}
           <span class="muted">{a.line}</span>
         </span>
       </PageHead>
@@ -304,7 +306,7 @@ function AgentPage({ a }: { a: Agent }) {
             <dl class="facts">
               <dt>In ranked</dt><dd>{a.estimate ? 'Not known yet' : `${a.pop}% of all picks`}</dd>
               <dt>Ranked wins</dt><dd>{a.estimate ? 'Not known yet' : `${a.win.toFixed(1)}% of games`}</dd>
-              <dt>By pros</dt><dd>{a.estimate ? 'Not known yet' : proKnown(a) ? `${a.pro ? `${a.pro}% of` : 'Hardly ever, in'} the ${PRO_MAPS_COUNTED} maps counted from the year’s top events` : `None yet, since ${a.name} came out after the year’s top events`}</dd>
+              <dt>By pros</dt><dd>{a.estimate ? 'Not known yet' : proKnown(a) ? `${a.pro ? `Picked by ${a.pro}% of teams across` : 'Hardly ever, across'} the ${PRO_MAPS_COUNTED} maps counted from the year’s top events` : `None yet, since ${a.name} came out after the year’s top events`}</dd>
               <dt>Released</dt><dd>{fmtLongDay(a.released)}</dd>
             </dl>
             {!a.estimate && (

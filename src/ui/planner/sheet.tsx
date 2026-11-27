@@ -10,7 +10,7 @@ import { playTitle } from '../../core/kb/plays.ts';
 import { roleOf } from '../../core/kb/roles.ts';
 import { againstWords } from '../../core/engine/explain.ts';
 import { jobWords, momentLabel, plantLine, playFitLabel, WEAK_JOB } from '../../core/engine/plays.ts';
-import { fitWords, partyLines, type SummaryParts } from '../../core/engine/summary.ts';
+import { fitShown, partyLines, type SummaryParts } from '../../core/engine/summary.ts';
 import { fmtLongDay, keyOf } from '../../core/dates.ts';
 import { AgentIcon } from '../art.tsx';
 import { Minimap, ROUTE_COLORS } from '../components/minimap.tsx';
@@ -23,7 +23,7 @@ export interface SheetParts extends SummaryParts {
   /** A saved plan's name and note. */
   name?: string;
   note?: string;
-  /** Whether fits show as numbers (Settings), or only as tiers. */
+  /** Whether fits show as numbers (Settings), or only as tiers: always given for the sheet. */
   numbers: boolean;
 }
 
@@ -46,7 +46,7 @@ export function PlanSheet({ p }: { p: SheetParts }) {
         </div>
         <p class="sheet-fit">
           <span class={`tier tier-${p.tier.toLowerCase()}`}>{p.tier}</span>
-          <span>{p.numbers ? fitWords(p) : `Tier ${p.tier}`}</span>
+          <span>{fitShown(p)}</span>
         </p>
       </header>
 

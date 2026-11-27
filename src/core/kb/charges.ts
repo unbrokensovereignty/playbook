@@ -11,7 +11,9 @@
  *
  * Checked on 12 November 2026, for patch 13.09, against the abilities on Liquipedia and the VALORANT
  * fandom wiki and the game's own numbers as valorant.gs lists them. Riot hasn't published Hush's
- * Flashbulb or Veto's Chokehold yet, so they count as one each until it does. After a patch, check
+ * Flashbulb or Veto's Chokehold yet, so they count as one each until it does. Patch 13.10 (10 November
+ * 2026) changed only cooldowns (Cypher's Spycam, Killjoy's Turret and Vyse's Arc Rose come back sooner once
+ * destroyed), no charges, as Riot's notes and Dexerto's summary agree. After a patch, check
  * the patch notes for charge changes and update the agent here.
  */
 export type ChargeKey = 'C' | 'Q' | 'E';

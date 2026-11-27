@@ -5,7 +5,7 @@
  */
 import { FIT_MID } from '../../core/engine/weights.ts';
 import { POOL } from '../../core/kb/maps.ts';
-import { countWord, plural } from '../../core/util.ts';
+import { plural } from '../../core/util.ts';
 import { tierWords } from '../planner/words.ts';
 
 export type Side = 'right' | 'left' | 'below' | 'above';
@@ -52,7 +52,7 @@ const FIRST_STEPS: TourStep[] = [
 ];
 const FIRST: Tour = {
   id: 'first', name: 'First steps', group: 'basics', page: 'home',
-  blurb: `Where to start, where your question lives, and where to find more, in ${countWord(FIRST_STEPS.length)} steps.`,
+  blurb: 'A quick look at Home, your question and Search.',
   steps: FIRST_STEPS,
 };
 
@@ -66,7 +66,7 @@ const START: Tour = {
     { target: 'home-yours', side: 'above', title: 'Your agents', text: 'The agents you play, how each fits at your rank, and where they’re best. Every plan gives you one of them.' },
     { page: 'planner', target: 'q-map', side: 'right', title: 'Your situation', text: 'Tell the Planner the map, side, sites and rank of your game, who you’re queuing with, and any agents or roles you want. Every change answers again straight away.' },
     { target: 'comp-first', side: 'left', title: 'The comps that fit', text: `The best comps come first, each with its fit. ${fitWords()}`, look: 'the first comp in the list' },
-    { target: 'comp-tools', side: 'left', title: 'Why it fits', text: 'Pros and cons come from the same numbers as the fit, so they always agree with the ranking. Plays gives each player a job on the map, and Tips has a line for each agent.', look: 'the first comp, opened' },
+    { target: 'comp-tools', side: 'left', title: 'Why it fits', text: 'Pros and cons say why it ranks where it does. Plays gives each player a job on the map, and Tips has a line for each agent.', look: 'the first comp, opened' },
     { page: 'select', target: 'select-pick', side: 'left', title: 'Agent select', text: 'Use it in the seconds before you lock in. Add your teammates’ agents as they lock in, and see which agent to pick now and why. Log the game after it.' },
     { page: 'rankings', target: 'rank-controls', side: 'below', title: 'Rankings', text: 'Tier lists of agents and comps for any map, side and rank, and every agent’s fit on every map.' },
     { page: 'agents', target: 'agent-group', side: 'below', title: 'Agents', text: 'Every agent’s abilities and strengths, the maps and ranks they fit best, and who they work well with.' },
@@ -94,7 +94,7 @@ const PLAN: Tour = {
     { target: 'comp-first', side: 'left', title: 'A comp and its fit', text: fitWords(), look: 'the first comp in the list' },
     { target: 'comp-reasons', side: 'left', title: 'How it wins, pros and cons', text: 'The line on top says how the comp wins, from what it does best here. Pros and cons are read off the same numbers as the fit, so they always agree with the ranking. A con says what the team is missing and what that costs it.', look: 'the first comp, opened' },
     { target: 'comp-strengths', side: 'left', title: 'What the situation needs', text: 'How much this map, side and rank asks for each thing, how much of it the team covers, and who brings it, with the abilities they’d use.', look: 'the first comp, opened' },
-    { target: 'comp-tools', side: 'left', title: 'Plays, tips and saving', text: 'Plays gives each player a job in a hit, a hold, a retake or a pistol round, drawn on the minimap. Tips has a line for each agent. Copy puts the plan into words for your team chat, short or whole, Print puts it on one sheet of paper, Compare sets it beside another comp, and Save plan keeps it.', look: 'the first comp, opened' },
+    { target: 'comp-tools', side: 'left', title: 'Plays, tips and saving', text: 'Plays gives each player a job in a hit, a hold, a retake or a pistol round, drawn on the minimap. Tips has a line for each agent. Copy turns the plan into a message for your team chat, short or in full. Print fits it on one sheet. Compare sets it beside another comp, and Save plan keeps it.', look: 'the first comp, opened' },
   ],
 };
 

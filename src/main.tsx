@@ -23,7 +23,7 @@ import {
   backendKind, bindRepo, data, minute, onHashChange, quarantinedCount, reportError, runLeaving, setTabGuard, tabRole, toast, versions,
 } from './ui/state.ts';
 import { applyAppearance } from './ui/theme.ts';
-import { configureSound, SOUND_SETS, type SoundSet } from './ui/sound.ts';
+import { configureSound, DEFAULT_SET, SOUND_SETS, type SoundSet } from './ui/sound.ts';
 
 /**
  * Reloads everything from storage (another tab saved, or this tab just took over). `ready` runs just
@@ -72,7 +72,7 @@ async function start() {
     const s = data().settings();
     applyAppearance(s, data().themes());
     configureSound({
-      on: s.sound, set: SOUND_SETS.includes(s.soundSet as SoundSet) ? (s.soundSet as SoundSet) : 'desk',
+      on: s.sound, set: SOUND_SETS.includes(s.soundSet as SoundSet) ? (s.soundSet as SoundSet) : DEFAULT_SET,
       master: s.volMaster / 100, ui: s.volUi / 100, results: s.volResults / 100,
     });
   });

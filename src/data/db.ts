@@ -10,8 +10,10 @@ export type Origin = 'local' | 'undo' | 'redo' | 'remote';
 export type Listener = (stores: ReadonlySet<StoreName>, origin: Origin) => void;
 export type SaveState = 'saved' | 'saving' | 'error';
 
-/** A recorded change. `stale` marks one that undo or redo found nothing left to take back in (it changed since). */
-/** `stepped`: brought back by an undo or redo, so a change after it is a step of its own, however soon. */
+/**
+ * A recorded change. `stale` marks one that undo or redo found nothing left to take back in (it changed since).
+ * `stepped`: brought back by an undo or redo, so a change after it is a step of its own, however soon.
+ */
 export interface Action { label: string; changes: Change[]; at: number; stale?: boolean; stepped?: boolean }
 
 export interface Tx {
@@ -124,8 +126,7 @@ export class Db {
   /**
    * Runs `fn` as one change. Reads inside see the transaction's own writes. If `fn` throws, nothing
    * is changed. Returns the recorded action (null when nothing changed).
-   */
-  /**
+   *
    * `join` (ms): a change with the same label as the last undo step, within that long of it, joins
    * that step (a slider dragged, a stepper pressed again and again), so one undo takes it all back.
    */

@@ -324,7 +324,7 @@ play('abyss', 'defense', 'A', 'retake', 'Retake A', 'Retake together from A Link
   'retake: Defender Side Spawn > A Security > A Site | Retake from A Security together with the team, checking A Secret as you go.',
   'duel: A Tower | Swing from A Tower at the same time to split their attention.',
 ]);
-play('abyss', 'defense', 'B', 'retake', 'Retake B', 'Retake through B Link with B Tower swinging at the same time.', [
+play('abyss', 'defense', 'B', 'retake', 'Retake B', 'Come back through B Link while a teammate swings from B Tower.', [
   'smoke: Defender Side Spawn > B Link | Smoke B Main and B Nest from B Link.',
   'recon: B Tower | Clear the site with information from B Tower.',
   'flash retake: B Link > B Site | Flash and retake through B Link together.',
@@ -435,7 +435,7 @@ play('bind', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Lamps with A T
   'flash retake: A Lamps > A Site | Flash and retake together from A Lamps.',
   'duel: A Tower > A Site | Swing from A Tower (Heaven) at the same time.',
 ]);
-play('bind', 'defense', 'B', 'retake', 'Retake B', 'Retake through B Hall with B Elbow swinging at the same time.', [
+play('bind', 'defense', 'B', 'retake', 'Retake B', 'Come in through B Hall while a teammate swings from B Elbow.', [
   'smoke: B Hall | Smoke B Long and B Window (Hookah) from B Hall.',
   'recon: B Hall | Clear the site with information first.',
   'flash retake: B Hall > B Site | Flash and retake through B Hall together.',
@@ -546,7 +546,7 @@ play('corrode', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Crane with 
   'flash retake: A Crane > A Site | Flash and retake together.',
   'duel: A Link > A Site | Swing from A Link at the same time.',
 ]);
-play('corrode', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Arch with B Tower swinging at the same time.', [
+play('corrode', 'defense', 'B', 'retake', 'Retake B', 'Come back onto B from B Arch while a teammate swings from B Tower.', [
   'smoke: B Arch | Smoke B Main from B Arch.',
   'recon: B Link | Clear the site with information.',
   'flash retake: B Arch > B Site | Flash and retake together.',
@@ -605,7 +605,7 @@ play('fracture', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Link with 
   'flash retake: A Link > A Site | Flash and retake together.',
   'duel: A Dish > A Drop | Swing from A Dish at the same time.',
 ]);
-play('fracture', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Link with B Canteen swinging at the same time.', [
+play('fracture', 'defense', 'B', 'retake', 'Retake B', 'Come back through B Link while a teammate swings from B Canteen.', [
   'smoke: B Link | Smoke B Tree and B Arcade from B Link.',
   'recon: B Generator | Clear the site with information.',
   'flash retake: B Link > B Site | Flash and retake together.',
@@ -669,13 +669,13 @@ play('haven', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Link with A T
   'flash retake: A Link > A Site | Flash and retake together.',
   'duel: A Tower > A Site | Swing from A Tower (Heaven) at the same time.',
 ]);
-play('haven', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Back with A Link swinging at the same time.', [
+play('haven', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Back while a teammate swings in from A Link.', [
   'smoke: B Back | Smoke Mid Courtyard from B Back so attackers in mid can’t help.',
   'recon: A Link | Clear B Site with information from A Link.',
   'flash retake: B Back > B Site | Flash and retake from B Back together.',
   'duel: A Link > B Site | Swing from A Link at the same time.',
 ]);
-play('haven', 'defense', 'C', 'retake', 'Retake C', 'Retake from C Link with C Window swinging at the same time.', [
+play('haven', 'defense', 'C', 'retake', 'Retake C', 'Come back through C Link as a teammate swings from C Window.', [
   'smoke: C Link | Smoke C Long and C Garage from C Link.',
   'recon: C Window | Clear the site with information from C Window.',
   'flash retake: C Link > C Site | Flash and retake together.',
@@ -796,13 +796,13 @@ play('lotus', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Drop with A T
   'flash retake: A Drop > A Site | Flash and retake together.',
   'duel: A Link > A Tree | Swing from A Tree at the same time.',
 ]);
-play('lotus', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Upper with A Link swinging at the same time.', [
+play('lotus', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Upper while a teammate swings in from A Link.', [
   'smoke: B Upper | Smoke B Main from B Upper.',
   'recon: B Upper | Clear the site with information.',
   'flash retake: B Upper > B Site | Flash and retake together.',
   'duel: A Link > B Site | Swing from A Link at the same time.',
 ]);
-play('lotus', 'defense', 'C', 'retake', 'Retake C', 'Retake from C Hall with C Waterfall swinging at the same time.', [
+play('lotus', 'defense', 'C', 'retake', 'Retake C', 'Come back through C Hall while a teammate swings from C Waterfall.', [
   'smoke: C Hall | Smoke C Main and C Mound from C Hall.',
   'recon: C Gravel | Clear the site with information.',
   'flash retake: C Hall > C Site | Flash and retake together.',
@@ -854,7 +854,7 @@ play('pearl', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Flowers with 
   'flash retake: A Flowers > A Site | Flash and retake together.',
   'duel: A Secret > A Site | Swing from A Secret at the same time.',
 ]);
-play('pearl', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Tunnel with B Hall swinging at the same time.', [
+play('pearl', 'defense', 'B', 'retake', 'Retake B', 'Come back through B Tunnel as a teammate swings from B Hall.', [
   'smoke: B Tunnel | Smoke B Main from B Tunnel.',
   'recon: B Hall | Clear the site with information.',
   'flash retake: B Tunnel > B Site | Flash and retake together.',
@@ -906,7 +906,7 @@ play('split', 'defense', 'A', 'retake', 'Retake A', 'Drop onto A from A Tower (A
   'flash retake: A Tower > A Site | Flash and drop onto the site together.',
   'duel: A Screens > A Site | Swing from A Screens at the same time.',
 ]);
-play('split', 'defense', 'B', 'retake', 'Retake B', 'Drop onto B from B Tower (B Heaven) with B Alley swinging at the same time.', [
+play('split', 'defense', 'B', 'retake', 'Retake B', 'Drop onto B from B Tower (B Heaven) as a teammate swings from B Alley.', [
   'smoke: B Stairs | Smoke B Garage from B Stairs.',
   'recon: B Tower | Clear the site with information from B Tower (B Heaven).',
   'flash retake: B Tower > B Site | Flash and drop onto the site together.',
@@ -964,7 +964,7 @@ play('summit', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Art with A C
   'flash retake: A Art > A Site | Flash and retake together.',
   'duel: A Cave > A Site | Swing from A Cave at the same time.',
 ]);
-play('summit', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Tower with B Drop swinging at the same time.', [
+play('summit', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Tower while a teammate swings from B Drop.', [
   'smoke: B Gym | Smoke B Main and B Link from B Gym.',
   'recon: B Trophy | Clear the site with information.',
   'flash retake: B Tower > B Site | Flash and retake together.',
@@ -1022,7 +1022,7 @@ play('sunset', 'defense', 'A', 'retake', 'Retake A', 'Retake from A Link with A 
   'flash retake: A Link > A Site | Flash and retake together.',
   'duel: A Alley > A Site | Swing from A Alley at the same time.',
 ]);
-play('sunset', 'defense', 'B', 'retake', 'Retake B', 'Retake from B Boba with B Market swinging at the same time.', [
+play('sunset', 'defense', 'B', 'retake', 'Retake B', 'Come back through B Boba while a teammate swings from B Market.', [
   'smoke: B Boba | Smoke B Main from B Boba.',
   'recon: B Market | Clear the site with information.',
   'flash retake: B Boba > B Site | Flash and retake together.',

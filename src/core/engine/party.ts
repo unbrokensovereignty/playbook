@@ -4,48 +4,15 @@
  * of the team could fill, each fill weighted by how likely random players at your rank are to
  * pick it (they pick popular agents more, and usually fill a missing controller).
  */
-import { AGENTS } from '../kb/agents.ts';
 import { ROLE_IDS } from '../kb/roles.ts';
-import { RANKS } from '../kb/ranks.ts';
-import { BY_RANK, RADIANT, RANKED_SOURCE } from '../kb/ranked.ts';
-import { D, N, ROLE_OF, ROLES_N, roleIndex, type Model } from './model.ts';
+import { D, N, ROLE_OF, ROLES_N, pickShareAt, roleIndex, type Model } from './model.ts';
 import { roleCostOf, scoreTeam, TopK, walkTeams, type Rules, type Team } from './search.ts';
 import { FILL_MISSING, FILL_TOO_MANY_CONTROLLERS, FILL_TOO_MANY_DUELISTS } from './weights.ts';
 
 const CONTROLLER = roleIndex('controller');
 
-/**
- * Each agent's share of picks at each rank (kb/ranked.ts). The twenty agents picked most at a rank
- * get the shares the twenty picked most across all ranks have (agents.ts, `pop`), in their order at
- * that rank, and the rest share what's left evenly; at Radiant, where the shares themselves are
- * known, they're used as they are. An agent released since those numbers keeps their share across all ranks.
- */
-const SHARES: readonly Float64Array[] = (() => {
-  const counted = AGENTS.filter((a) => a.released < RANKED_SOURCE.from);
-  const sorted = counted.map((a) => a.pop).sort((x, y) => y - x);
-  return RANKS.map((r) => {
-    const out = new Float64Array(AGENTS.length);
-    const list = BY_RANK[r.id];
-    const rest = sorted.slice(list.length);
-    const tail = rest.length ? rest.reduce((t, x) => t + x, 0) / Math.max(1, counted.length - list.length) : 0;
-    for (const a of AGENTS) {
-      if (!counted.includes(a)) { out[a.index] = a.pop; continue; }
-      const at = list.indexOf(a.id);
-      if (r.id === 'radiant') out[a.index] = RADIANT[a.id]?.[0] ?? Math.min(0.1, tail);
-      else out[a.index] = at >= 0 ? sorted[at]! : tail;
-    }
-    return out;
-  });
-})();
-
-/** How often random players at rank `t` (0 Iron to 1 Radiant) lock an agent in, relative to others: their share of picks there, between the two nearest ranks. */
-export function pickWeight(agent: number, t: number): number {
-  const at = RANKS.findIndex((r) => r.t >= t - 1e-9);
-  const hi = Math.max(0, at), lo = Math.max(0, hi - 1);
-  const span = RANKS[hi]!.t - RANKS[lo]!.t;
-  const f = span > 0 ? (t - RANKS[lo]!.t) / span : 1;
-  return Math.max(0.05, SHARES[lo]![agent]! * (1 - f) + SHARES[hi]![agent]! * f);
-}
+/** How often random players at rank `t` (0 Iron to 1 Radiant) lock an agent in, relative to others: their share of picks there (pickShareAt in model.ts). */
+export const pickWeight = (agent: number, t: number): number => Math.max(0.05, pickShareAt(agent, t));
 
 const DUELIST = ROLE_IDS.indexOf('duelist');
 /** How likely random players are to leave the team like this, as a factor. */
@@ -147,7 +114,7 @@ function allFills(m: Model, pool: readonly number[], size: number, rankT: number
  * together as well as a five-stack at its rank, so it pays what that five-stack would for the
  * second (Model.ownSecond), and it picks the two as that five-stack would (Model.together).
  */
-function ownSmokes(m: Model, party: readonly number[]): number {
+export function ownSmokes(m: Model, party: readonly number[]): number {
   let n = 0, own = 0;
   for (const a of party) if (ROLE_OF[a] === CONTROLLER) { n++; own += m.together[a]! - m.base[a]!; }
   return n >= 2 ? m.ownSecond + own : 0;

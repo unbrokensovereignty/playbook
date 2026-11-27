@@ -2,6 +2,7 @@
  * Undo and redo from anywhere: Ctrl Z, the sidebar buttons, the command palette and a message's
  * Undo button.
  */
+import { signal } from '@preact/signals';
 import type { Action } from '../data/db.ts';
 import { data, safely, toast } from './state.ts';
 import { play } from './sound.ts';
@@ -13,7 +14,8 @@ function report(a: Action | null | undefined, kind: 'undo' | 'redo') {
   play('undo');
   // the message's Redo is for this change only, while it's still the one a redo would bring back
   const back = data().db.redoStack.at(-1);
-  if (kind === 'undo') toast(`Undone: ${a.label}.`, { action: { label: 'Redo', run: () => { if (canRedoThis(back)) redo(); }, live: () => canRedoThis(back) } });
+  // straight to the saved data's history: a drawing opened since holds Redo from anywhere else, but this button is about this change
+  if (kind === 'undo') toast(`Undone: ${a.label}.`, { action: { label: 'Redo', run: () => { if (canRedoThis(back)) report(safely(() => data().redo()), 'redo'); }, live: () => canRedoThis(back) } });
   else toast(`Redone: ${a.label}.`);
 }
 
@@ -23,12 +25,23 @@ const lookOnly = () => {
   return true;
 };
 
+/**
+ * A page's own history (Draw a play's drawing, once you've changed it). While a page holds one, Undo and
+ * Redo from anywhere go to it, as Ctrl Z does there: the sidebar's buttons and Search's Undo too.
+ */
+export interface PageHistory { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean }
+export const pageHistory = signal<PageHistory | null>(null);
+
 export function undo() {
+  const h = pageHistory.peek();
+  if (h) { h.undo(); return; }
   if (lookOnly()) return;
   report(safely(() => data().undo()), 'undo');
 }
 
 export function redo() {
+  const h = pageHistory.peek();
+  if (h) { h.redo(); return; }
   if (lookOnly()) return;
   report(safely(() => data().redo()), 'redo');
 }

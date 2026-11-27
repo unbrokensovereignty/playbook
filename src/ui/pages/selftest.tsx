@@ -1,6 +1,6 @@
 /**
- * The self-test (#selftest): runs the same checks as `npm test`, inside this browser, against a
- * throwaway in-memory copy. Your saved data isn't touched.
+ * The self-test (#selftest): runs the behaviour specs (tests/specs, which `npm test` runs too) inside
+ * this browser, against a throwaway in-memory copy. Your saved data isn't touched.
  */
 import { useState } from 'preact/hooks';
 import { PageHead } from '../shell.tsx';
@@ -31,7 +31,7 @@ export function SelfTestPage(_p: PageProps) {
   return (
     <>
       <PageHead eyebrow="Help" title="Self-test" actions={<Button kind="primary" icon="play" busy={busy} onClick={() => void run()}>{results ? 'Run again' : `Run ${specs.length} checks`}</Button>}>
-        Checks the app’s logic in this browser. It works on a throwaway copy, so your saved plans, parties and settings aren’t touched.
+        Checks the app’s logic in this browser. It works on a throwaway copy, so nothing you’ve saved is touched.
       </PageHead>
       {results && (
         <div class="panel stack" data-testid="selftest-result">

@@ -119,7 +119,7 @@ test('their agents are kept with the question, at most five, and every situation
 test('nothing in a kit is said to answer their information, and fakes are offered only to ranks that run them', () => {
   // dashes, slides and teleports don't stop a Recon Bolt or a Haunt: a coach says to shoot the
   // utility down or step out of it, and from Platinum to show one site and hit the other
-  // (grading round 5: "High Gear and Shrouded Step answer their Sova" on twelve answers)
+  // (graded review, pass 5: "High Gear and Shrouded Step answer their Sova" on twelve answers)
   const problems: string[] = [];
   const enemy = ['sova', 'fade', 'omen', 'jett', 'killjoy'];
   for (const rank of ['iron', 'silver', 'gold', 'platinum', 'immortal'] as const) for (const m of POOL) {
@@ -139,7 +139,7 @@ test('nothing in a kit is said to answer their information, and fakes are offere
 
 test('against lineups that guard a planted Spike, the comp is told what its utility does about the plant', () => {
   // a Slow Orb or a Nanoswarm on the plant spot holds the plant up; it doesn't answer a lineup once
-  // the Spike is down (grading round 5, #73)
+  // the Spike is down (graded review, pass 5, #73)
   const problems: string[] = [];
   const enemy = ['viper', 'brimstone', 'sova', 'killjoy', 'jett'];
   for (const rank of ['iron', 'gold', 'immortal'] as const) for (const m of POOL) {

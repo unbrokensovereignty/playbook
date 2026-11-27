@@ -21,6 +21,7 @@ import { tourById, type Side, type Tour } from './list.ts';
 import { tourState, touring, type Live } from './now.ts';
 import { placeCard, type Placed, type Rect } from './place.ts';
 import { setupDue } from '../setup.tsx';
+import { leave } from '../leave.ts';
 
 const doneKey = (id: string) => `tour:${id}`;
 const OFFER_KEY = 'tour-offer';
@@ -128,13 +129,27 @@ const findTarget = (hook: string | undefined): HTMLElement | null =>
 
 const sameRect = (a: DOMRect | null, b: DOMRect | null) => !!a && !!b && Math.abs(a.left - b.left) < 0.5 && Math.abs(a.top - b.top) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5;
 
-/** The page slides in when it changes; wait for that before measuring. */
+/** Waits for any animation still running on the page itself before measuring. */
 const pageSettled = () => !document.querySelector('.page')?.getAnimations().some((a) => a.playState === 'running');
 
 const frame = () => new Promise<void>((ok) => requestAnimationFrame(() => ok()));
 
 /** The page the tour itself just went to (so that change doesn't count as leaving). */
 let expected = '';
+
+/** A target off screen comes to the middle when that leaves room for the card above or below it,
+ * else to the top with the room below it; so does one on screen with no room for the card. True when it scrolled. */
+function bringIntoView(el: HTMLElement, live: Live): boolean {
+  const r = el.getBoundingClientRect();
+  const c = document.querySelector<HTMLElement>('.tour-card');
+  const off = r.top < 0 || r.bottom > innerHeight;
+  const cramped = !off && !!c && r.top > 48 && !fit(c, holeOf(r, innerWidth, innerHeight), live.tour.steps[live.step]?.side, innerWidth, innerHeight).clear;
+  if (!off && !cramped) return false;
+  if (c) c.style.width = '';
+  const middle = off && (innerHeight - r.height) / 2 >= (c?.offsetHeight ?? 0) + 40;
+  el.scrollIntoView({ block: middle ? 'center' : 'start', behavior: 'instant' as ScrollBehavior });
+  return true;
+}
 
 /** Waits for a step's page and target: the target exists and has stopped moving. Returns it, or null when it never showed up. */
 async function arrive(live: Live, alive: () => boolean): Promise<HTMLElement | null> {
@@ -158,18 +173,8 @@ async function arrive(live: Live, alive: () => boolean): Promise<HTMLElement | n
     if (!el || !pageSettled()) { still = 0; last = null; continue; }
     const r = el.getBoundingClientRect();
     if (!scrolled) {
-      // a target off screen comes to the middle when that leaves room for the card above or below
-      // it, else to the top with the room below it; so does one on screen with no room for the card
-      const c = document.querySelector<HTMLElement>('.tour-card');
-      const off = r.top < 0 || r.bottom > innerHeight;
-      const cramped = !off && !!c && r.top > 48 && !fit(c, holeOf(r, innerWidth, innerHeight), live.tour.steps[live.step]?.side, innerWidth, innerHeight).clear;
-      if (off || cramped) {
-        scrolled = true;
-        if (c) c.style.width = '';
-        const middle = off && (innerHeight - r.height) / 2 >= (c?.offsetHeight ?? 0) + 40;
-        el.scrollIntoView({ block: middle ? 'center' : 'start', behavior: 'instant' as ScrollBehavior });
-        still = 0; last = null; continue;
-      }
+      scrolled = bringIntoView(el, live);
+      if (scrolled) { still = 0; last = null; continue; }
     }
     still = sameRect(r, last) ? still + 1 : 0;
     last = r;
@@ -208,10 +213,13 @@ export function TourHost() {
   const hide = overlayOpen();
   const [shown, setShown] = useState(false);
   const [missing, setMissing] = useState(false);
+  const [away, setAway] = useState(false);
   const spot = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
   const target = useRef<HTMLElement | null>(null);
   const token = useRef(0);
+  // true from the moment a step has to change pages until it arrives: nothing is placed on the old page
+  const leaving = useRef(false);
 
   useEffect(() => {
     addEventListener('keydown', onKey, true);
@@ -231,28 +239,54 @@ export function TourHost() {
   // each step: fade out, go to its page, wait for its target, then show
   useLayoutEffect(() => {
     const id = ++token.current;
-    setShown(false);
+    // a step whose target is already on this page keeps the spotlight on and moves to it. The tour
+    // fades out only when the step has to change pages, or its target takes a moment to turn up
+    const s = live?.tour.steps[live.step];
+    const now = live && routeNow() === pageOf(live.tour, live.step) ? findTarget(s?.target) : null;
+    const here = !!live && routeNow() === pageOf(live.tour, live.step) && (!s?.target || !!now);
+    leaving.current = !here;
+    if (!here) {
+      setShown(false);
+      // between pages the window stays dimmed, with no hole, so it doesn't flash bright. The hole shuts at
+      // once (gliding to the middle of the window would be a move that means nothing)
+      spot.current?.classList.add('none', 'jump');
+      setAway(true);
+    }
+    // a target that's already here but off screen is brought into view before the frame is drawn, so the
+    // card and the spotlight go straight to it (never to the middle of the window first)
+    else if (now && live) bringIntoView(now, live);
+    const late = here ? setTimeout(() => { if (token.current === id) setShown(false); }, 120) : 0;
     setMissing(false);
     target.current = null;
     // the card measures at its usual width until the new step places it
     if (card.current) card.current.style.width = '';
-    if (!live) { arriving = false; return; }
+    // aria-busy while the step arrives: screen readers wait for it, and so can tests
+    const busy = (on: boolean) => { if (on) card.current?.setAttribute('aria-busy', 'true'); else card.current?.removeAttribute('aria-busy'); };
+    if (!live) { arriving = false; busy(false); return; }
     arriving = true;
+    busy(true);
     const alive = () => token.current === id && tourState.value === live;
     void arrive(live, alive).then((el) => {
+      clearTimeout(late);
       if (!alive()) return;
       target.current = el;
+      leaving.current = false;
       setMissing(!!live.tour.steps[live.step]?.target && !el);
       setShown(true);
+      setAway(false);
       arriving = false;
+      busy(false);
       shownAt = performance.now();
     });
-    return () => { if (token.current === id) arriving = false; };
+    return () => { if (token.current === id) { arriving = false; busy(false); } };
   }, [live]);
 
-  // follow the target as it moves (scrolling, resizing, content changing)
-  useEffect(() => {
-    if (!live || !shown || hide) return;
+  // follow the target as it moves (scrolling, resizing, content changing); placed before the first
+  // frame that shows it, so the card never shows in the middle of the window first
+  useLayoutEffect(() => {
+    // a step that's changing pages isn't placed until it arrives: placing it now, against the old page,
+    // would send the card to the middle of the window and say its target isn't on screen
+    if (!live || !shown || hide || leaving.current) return;
     let raf = 0, lastKey = '';
     const s = live.tour.steps[live.step];
     const tick = () => {
@@ -303,7 +337,7 @@ export function TourHost() {
   const count = live.tour.steps.length;
   const last = live.step === count - 1;
   return (
-    <div class={`tour${shown && !hide ? ' on' : ''}${hide ? ' paused' : ''}`} aria-hidden={hide ? 'true' : undefined} data-target={s?.target}>
+    <div class={`tour${shown && !hide ? ' on' : ''}${away && !hide ? ' away' : ''}${hide ? ' paused' : ''}`} aria-hidden={hide ? 'true' : undefined} data-target={s?.target}>
       <div class="tour-block" />
       <div class={`tour-spot${s?.target && !missing ? '' : ' none'}`} ref={spot} />
       <div class="tour-card" ref={card} role="dialog" aria-modal="false" aria-labelledby="tour-title" aria-describedby="tour-text" tabIndex={-1} data-side="center">
@@ -345,7 +379,7 @@ export function TourOffer() {
         <p class="small muted">{firstSteps} quick steps show you where things are, and Help → Tours has one for each page. Press Space to go from step to step.</p>
       </div>
       <div class="row">
-        <Button size="sm" kind="quiet" onClick={() => remember(OFFER_KEY)}>Not now</Button>
+        <Button size="sm" kind="quiet" onClick={(e) => leave((e.currentTarget as Element).closest('.tour-offer'), () => remember(OFFER_KEY))}>Not now</Button>
         <Button size="sm" kind="primary" onClick={() => startTour('first')}>Show me</Button>
       </div>
     </aside>

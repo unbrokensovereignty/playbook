@@ -68,13 +68,14 @@ export const CancelButton = ({ onClick, children }: { onClick: () => void; child
   <Button kind="quiet" sound="close" onClick={onClick}>{children ?? 'Cancel'}</Button>
 );
 
-export function IconButton(p: { icon: IconName; label: string; onClick?: (e: MouseEvent) => void; active?: boolean; size?: 'sm' | 'md'; disabled?: boolean; tipSide?: 'right' | 'below'; class?: string; sound?: SoundName | false; pressed?: boolean }) {
+export function IconButton(p: { icon: IconName; label: string; onClick?: (e: MouseEvent) => void; active?: boolean; size?: 'sm' | 'md'; disabled?: boolean; tipSide?: 'right' | 'below'; class?: string; sound?: SoundName | false; pressed?: boolean; describedBy?: string }) {
   return (
     <button
       type="button"
       class={`icon-btn${p.size === 'sm' ? ' sm' : ''}${p.active ? ' active' : ''}${p.class ? ' ' + p.class : ''}`}
       aria-label={p.label}
       aria-pressed={p.pressed}
+      aria-describedby={p.describedBy}
       data-tip={p.label}
       data-tip-side={p.tipSide}
       disabled={p.disabled}
@@ -240,7 +241,7 @@ export function Bar({ value, tone, size, label }: { value: number; tone?: 'good'
   const pct = Math.max(0, Math.min(1, value)) * 100;
   return (
     <div class={`bar${tone ? ' ' + tone : ''}${size ? ' ' + size : ''}`} role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-      <span style={{ width: `${pct}%` }} />
+      <span aria-hidden="true" style={{ transform: `translateX(${pct - 100}%)` }} />
     </div>
   );
 }
@@ -283,11 +284,29 @@ export function CountUp({ value, format = fmt, ms = 600, from0 }: { value: numbe
   return <span class="num">{format(shown)}</span>;
 }
 
-export function Tabs<T extends string>({ value, tabs, onChange, label, tour }: { value: T; tabs: readonly (readonly [T, string])[]; onChange: (v: T) => void; label: string; tour?: string }) {
+/** The id of a tab in the tab list called `label`, which its panel names itself by (`aria-labelledby`). */
+export const tabIdOf = (label: string, v: string) => `tab-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${v}`;
+
+/**
+ * Tabs, as screen readers expect them: one Tab stop for the list, the arrow keys (and Home and End)
+ * move between tabs and open each, and the panel under them says which tab it belongs to.
+ */
+export function Tabs<T extends string>({ value, tabs, onChange, label, tour, name = label }: { value: T; tabs: readonly (readonly [T, string])[]; onChange: (v: T) => void; label: string; tour?: string; /** What the tab ids are made from, when one page has several lists with the same label. */ name?: string }) {
+  const pick = (v: T) => { if (v !== value) { play('tick'); onChange(v); } };
+  const onKey = (e: KeyboardEvent) => {
+    const at = tabs.findIndex(([v]) => v === value);
+    const to = e.key === 'ArrowRight' ? (at + 1) % tabs.length : e.key === 'ArrowLeft' ? (at - 1 + tabs.length) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+    if (to < 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    const list = e.currentTarget as HTMLElement;
+    const v = tabs[to]![0];
+    pick(v);
+    requestAnimationFrame(() => list.querySelector<HTMLElement>(`#${tabIdOf(name, v)}`)?.focus());
+  };
   return (
-    <div class="tabs" role="tablist" aria-label={label} data-tour={tour}>
+    <div class="tabs" role="tablist" aria-label={label} data-tour={tour} onKeyDown={onKey}>
       {tabs.map(([v, text]) => (
-        <button type="button" role="tab" key={v} aria-selected={v === value} onClick={() => { if (v !== value) { play('tick'); onChange(v); } }}>{text}</button>
+        <button type="button" role="tab" key={v} id={tabIdOf(name, v)} aria-selected={v === value} tabIndex={v === value ? 0 : -1} onClick={() => pick(v)}>{text}</button>
       ))}
     </div>
   );

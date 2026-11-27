@@ -372,6 +372,9 @@ export function demandLine(f: Pick<FilledPlay, 'play' | 'demand' | 'needs' | 'sh
   return `${line} Most teams run it well from ${rankOf(PLAY_RANK.from[f.demand]).name}. At ${rankOf(rank).name} it’s harder to pull off, so it fits ${f.short > 2 ? 'a good deal' : 'a little'} less.`;
 }
 
+/** How much bigger `x` is than `y`, with fits that differ only by rounding (sums of the same parts in another order) counted equal. */
+const ahead = (x: number, y: number): number => (Math.abs(x - y) < 1e-9 ? 0 : x - y);
+
 /**
  * The plays a team can run on a map and side, best fit first. With sites, only plays for those
  * sites and plays for the whole map, the sites' own first (they're what was asked about), apart
@@ -385,9 +388,6 @@ export function demandLine(f: Pick<FilledPlay, 'play' | 'demand' | 'needs' | 'sh
  * more teamwork than teams there usually have fit less (PLAY_RANK). A play that reads and reacts
  * comes once, as its best branch, with every branch under `branches`.
  */
-/** How much bigger `x` is than `y`, with fits that differ only by rounding (sums of the same parts in another order) counted equal. */
-const ahead = (x: number, y: number): number => (Math.abs(x - y) < 1e-9 ? 0 : x - y);
-
 export function playsFor(team: readonly string[], map: string, side: Side, sites: readonly SiteId[] = [], low = false, more: readonly Play[] = [], rank?: RankId): FilledPlay[] {
   const wide = (f: FilledPlay) => Number(!f.play.site);
   // where attackers start to fake (PLAY_RANK.read.defense), a stack on the site asked is a guess at where they'll hit, so it waits with the whole map's plays

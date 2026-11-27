@@ -422,7 +422,7 @@ export const KITS: Record<string, Kit> = {
     "key": "Q",
     "slot": "ability1",
     "name": "Undercut",
-    "text": "EQUIP an <whitebold>Undercut</>. FIRE to send it forward. Applies <debuffred>suppress</> and <debuffred>vulnerable</> to all players."
+    "text": "EQUIP <whitebold>Undercut</>. FIRE to send it forward. Applies <debuffred>suppress</> and <debuffred>vulnerable</> to all players."
    },
    {
     "key": "E",
@@ -764,7 +764,7 @@ export const KITS: Record<string, Kit> = {
     "key": "X",
     "slot": "ultimate",
     "name": "Empress",
-    "text": "INSTANTLY gain <teal>Empress</>. <teal>Empress</> grants <teal>combat stim</>, endless <whitebold>Soul Orb</> consumption, and permanent <teal>overheal</>."
+    "text": "INSTANTLY gain <teal>empress</>. <teal>Empress</> grants <teal>combat stim</>, endless <whitebold>Soul Orb</> consumption, and permanent <teal>overheal</>."
    },
    {
     "key": "Passive",
@@ -1076,7 +1076,7 @@ export const KITS: Record<string, Kit> = {
     "key": "E",
     "slot": "ability2",
     "name": "Gatecrash",
-    "text": "EQUIP <whitebold>Gatecrash</>. FIRE to send it forward. ALT FIRE to place. REACTIVATE to teleport to it. INTERACT to fake a teleport. Resets every two kills."
+    "text": "EQUIP a <whitebold>Gatecrash</>. FIRE to send it forward. ALT FIRE to place. REACTIVATE to teleport to it. INTERACT to fake a teleport. Resets every two kills."
    },
    {
     "key": "X",

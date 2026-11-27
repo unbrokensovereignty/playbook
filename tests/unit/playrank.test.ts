@@ -65,7 +65,7 @@ test('from Iron to Silver, a play that needs groups timed together is rarely amo
 });
 
 test('with no site asked, a defense opens with a hold that covers every site rather than a stack, when they fit the same', () => {
-  // (grading round 4: Stack B came first on Breeze at Silver and Pearl at Gold, ahead of Hold in pairs at the same fit)
+  // (graded review, pass 4: Stack B came first on Breeze at Silver and Pearl at Gold, ahead of Hold in pairs at the same fit)
   const problems: string[] = [];
   for (const rank of ['silver', 'gold', 'platinum'] as const) {
     for (const m of MAPS) {
@@ -80,7 +80,7 @@ test('with no site asked, a defense opens with a hold that covers every site rat
 });
 
 test('at Gold, a play that needs groups timed together comes first for few of the best comps', () => {
-  // (grading round 4: Gold five-stacks on Split and Bind were sent on coordinated defaults, a plan for Platinum up)
+  // (graded review, pass 4: Gold five-stacks on Split and Bind were sent on coordinated defaults, a plan for Platinum up)
   let hard = 0, n = 0;
   const where: string[] = [];
   for (const m of MAPS) for (const side of SIDES) {

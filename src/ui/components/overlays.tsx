@@ -7,7 +7,7 @@ import { computed, signal } from '@preact/signals';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Icon, type IconName } from '../icons.tsx';
 import { Button, CancelButton, Field, IconButton, Kbd, TextInput } from './controls.tsx';
-import { closeDialog, dialogs, dismissToast, openDialog, paletteOpen, route, toasts, watch, type DialogSpec, type Toast } from '../state.ts';
+import { closeDialog, dialogs, dismissToast, editsText, openDialog, paletteOpen, route, toasts, watch, type DialogSpec, type Toast } from '../state.ts';
 import { STORES } from '../../data/tables.ts';
 import { canUndoThis, undoThis } from '../undo.ts';
 import { play } from '../sound.ts';
@@ -29,8 +29,32 @@ function trapTab(e: KeyboardEvent, box: HTMLElement) {
 
 // ---------------------------------------------------------------- dialogs
 
+/** How long after a dialog opens the rest of the double click that opened it is ignored. */
+const OPENING_MS = 500;
+
+/**
+ * When a dialog, menu or the search last went: the rest of the double click that closed it (a map tile, Save,
+ * Delete, a menu item, a search result) would land on the page under it.
+ */
+let goneAt = -Infinity;
+/** Notes that an overlay closed just now, so the rest of a double click on it lands nowhere. */
+export const overlayGone = () => { goneAt = performance.now(); };
+/**
+ * The rest of a double click that `since` (when an overlay came or went) is kept from landing. A
+ * text field is left alone: there a double click only selects a word, and that's what it was for.
+ */
+const swallow = (e: MouseEvent, since: number) => {
+  if (e.detail > 1 && performance.now() - since < OPENING_MS && !editsText(e.target)) { e.preventDefault(); e.stopPropagation(); }
+};
+const settleAfter = (e: MouseEvent) => swallow(e, goneAt);
+if (typeof addEventListener === 'function') { addEventListener('mousedown', settleAfter, true); addEventListener('click', settleAfter, true); }
+
 function DialogFrame({ d, top }: { d: DialogSpec; top: boolean }) {
   const box = useRef<HTMLDivElement>(null);
+  const born = useRef(performance.now());
+  // the second press of a double click on the button that opened the dialog lands in it, on a map, an agent
+  // or the backdrop: it mustn't pick or close anything
+  const settle = (e: MouseEvent) => swallow(e, born.current);
   // before the dialog is drawn, so a key pressed as soon as it shows (Esc) is already the dialog's
   useLayoutEffect(() => {
     const before = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
@@ -41,7 +65,7 @@ function DialogFrame({ d, top }: { d: DialogSpec; top: boolean }) {
     const target = el?.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ?? el?.querySelector<HTMLElement>('.dialog-body input, .dialog-body select, .dialog-body textarea') ?? el;
     target?.focus();
     // back to what had focus, or, if that's gone (the plan just deleted), to what's nearest where it was
-    return () => { if (before) placeOf(before)?.focus(); };
+    return () => { overlayGone(); if (before) placeOf(before)?.focus(); };
   }, []);
   // a button that goes away while focused (Clear, once there's nothing left to clear) would drop focus out of
   // the dialog: it moves to the next control after where it was, or to the dialog itself
@@ -63,9 +87,12 @@ function DialogFrame({ d, top }: { d: DialogSpec; top: boolean }) {
   return (
     <div
       class="scrim"
+      onMouseDownCapture={settle} onClickCapture={settle}
       onMouseDown={(e) => { if (e.target === e.currentTarget && d.dismissable && top) { play('close'); close(); } }}
       onKeyDown={(e) => {
         if (!top || !box.current) return;
+        // a held Enter that opened this dialog mustn't go on to press its focused button
+        if (e.key === 'Enter' && e.repeat && !(e.target instanceof HTMLTextAreaElement)) e.preventDefault();
         if (e.key === 'Escape' && d.dismissable) { e.stopPropagation(); play('close'); close(); }
         trapTab(e, box.current);
       }}
@@ -83,11 +110,11 @@ export function DialogHost() {
 }
 
 /** The usual dialog layout: a title, a close button, the body and buttons. */
-export function DialogLayout({ title, icon, close, children, foot }: { title: ComponentChildren; icon?: IconName; close: () => void; children?: ComponentChildren; foot?: ComponentChildren }) {
+export function DialogLayout({ title, icon, danger, close, children, foot }: { title: ComponentChildren; icon?: IconName; danger?: boolean; close: () => void; children?: ComponentChildren; foot?: ComponentChildren }) {
   return (
     <>
       <div class="dialog-head">
-        {icon && <Icon name={icon} size={22} class="dialog-icon" />}
+        {icon && <Icon name={icon} size={22} class={danger ? 'dialog-icon danger' : 'dialog-icon'} />}
         <h2>{title}</h2>
         <IconButton icon="x" label="Close" size="sm" sound="close" onClick={close} />
       </div>
@@ -112,7 +139,7 @@ export interface ConfirmOptions {
 /** Asks a yes/no question. Resolves true only for yes. */
 export async function confirm(o: ConfirmOptions): Promise<boolean> {
   const v = await openDialog<boolean>(o.title, (close) => (
-    <DialogLayout title={o.title} icon={o.icon ?? (o.danger ? 'warning' : undefined)} close={() => close(false)} foot={<>
+    <DialogLayout title={o.title} icon={o.icon ?? (o.danger ? 'warning' : undefined)} danger={o.danger} close={() => close(false)} foot={<>
       <CancelButton onClick={() => close(false)}>{o.no}</CancelButton>
       <Button kind={o.danger ? 'danger' : 'primary'} autoFocus sound={o.danger ? 'remove' : 'tap'} onClick={() => close(true)}>{o.yes}</Button>
     </>}>
@@ -159,7 +186,7 @@ function PromptBody({ o, close }: { o: PromptOptions; close: (v?: unknown) => vo
 
 /** Asks for a line of text. Resolves undefined when cancelled. */
 export function prompt(o: PromptOptions): Promise<string | undefined> {
-  return openDialog<string>(o.title, (close) => <PromptBody o={o} close={close} />);
+  return openDialog<string>(o.title, (close) => <PromptBody o={o} close={close} />, { holds: true });
 }
 
 // ---------------------------------------------------------------- messages
@@ -178,23 +205,47 @@ function ToastItem({ t }: { t: Toast }) {
     return () => { clearTimeout(timer); left.current = Math.max(1200, left.current - (Date.now() - started)); };
   }, [hover]);
   return (
-    <div class={`toast ${t.tone}`} role={t.tone === 'bad' ? 'alert' : 'status'} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <div class={`toast ${t.tone}`} data-toast={t.id} role={t.tone === 'bad' ? 'alert' : 'status'} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      // a message waits while the pointer or keyboard focus is on it
+      onFocusIn={() => setHover(true)} onFocusOut={(e) => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node | null)) setHover(false); }}>
       <Icon name={TOAST_ICON[t.tone]} size={18} />
       <span>{t.text}</span>
       {t.undo && canUndoThis(t.undo) && (
-        <Button size="sm" sound={false} onClick={() => { dismissToast(t.id); undoThis(t.undo); }}>
+        // the second click of a double click would land on the Redo that takes this message's place
+        <Button size="sm" sound={false} onClick={(e) => { if (e.detail > 1) return; dismissToast(t.id, true); undoThis(t.undo); }}>
           {/* Ctrl Z waits while a dialog is open, so the key is shown only when it works */}
           Undo {!dialogs.value.length && !paletteOpen.value && <Kbd k="ctrl+z" />}
         </Button>
       )}
-      {t.action && (t.action.live?.() ?? true) && <Button size="sm" onClick={() => { dismissToast(t.id); t.action?.run(); }}>{t.action.label}</Button>}
+      {t.action && (t.action.live?.() ?? true) && <Button size="sm" onClick={(e) => { if (e.detail > 1) return; dismissToast(t.id); t.action?.run(); }}>{t.action.label}</Button>}
       <IconButton icon="x" label="Dismiss" size="sm" sound={false} onClick={() => dismissToast(t.id)} />
     </div>
   );
 }
 
+/** The messages. One that's moved by a newer message slides to its new place at Full, instead of jumping. */
 export function ToastHost() {
-  return <div class="toasts">{toasts.value.map((t) => <ToastItem key={t.id} t={t} />)}</div>;
+  const box = useRef<HTMLDivElement>(null);
+  const tops = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const was = tops.current, now = new Map<string, number>();
+    const els = [...box.current?.querySelectorAll<HTMLElement>('[data-toast]') ?? []];
+    // a message that left has already closed its gap as it went, so the rest are where they belong
+    const left = [...was.keys()].some((id) => !els.some((el) => el.dataset['toast'] === id));
+    const full = document.documentElement.dataset['motion'] === 'full' && !left;
+    // where each sits in the layout, leaving out any slide still running (a message rising in is 8 px low)
+    const base = box.current?.getBoundingClientRect().top ?? 0;
+    for (const el of els) {
+      const id = el.dataset['toast']!, top = base + el.offsetTop;
+      now.set(id, top);
+      const before = was.get(id);
+      if (full && before !== undefined && Math.abs(before - top) > 1 && !el.dataset['leaving']) {
+        el.animate([{ translate: `0 ${before - top}px` }, { translate: '0 0' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)', composite: 'add' });
+      }
+    }
+    tops.current = now;
+  });
+  return <div class="toasts" ref={box}>{toasts.value.map((t) => <ToastItem key={t.id} t={t} />)}</div>;
 }
 
 // ---------------------------------------------------------------- menus
@@ -211,7 +262,13 @@ export function openMenu(e: MouseEvent, items: readonly MenuItem[]) {
   e.preventDefault();
   e.stopPropagation();
   const el = e.currentTarget instanceof HTMLElement ? e.currentTarget : null;
-  if (menu.value && menu.value.from === el && e.type === 'click') { menu.value = null; return; }
+  // a second click on its button closes it, but not the second half of the double click that opened it
+  // (that second press took focus to the button: it goes back to the menu, so Esc and the arrow keys still work)
+  if (menu.value && menu.value.from === el && e.type === 'click') {
+    if (e.detail < 2) menu.value = null;
+    else document.querySelector<HTMLElement>('.menu[role=menu] button:not([disabled])')?.focus({ preventScroll: true });
+    return;
+  }
   const r = el && e.type === 'click' ? el.getBoundingClientRect() : null;
   menu.value = { items, x: r ? r.left : e.clientX, y: r ? r.bottom + 4 : e.clientY, from: el };
   play('open');
@@ -223,7 +280,7 @@ export const menuOpen = computed(() => menu.value !== null);
 export function MenuHost() {
   const m = menu.value;
   const box = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number; maxH?: number } | null>(null);
+  const [pos, setPos] = useState<{ x: number; y: number; maxH?: number; origin?: string } | null>(null);
   useEffect(() => {
     if (!m) { setPos(null); return; }
     const el = box.current;
@@ -239,7 +296,8 @@ export function MenuHost() {
       // (letting it out to measure can scroll a long menu back; it stays where it was)
       el.scrollTop = scrolled;
       const r = m.from?.isConnected ? m.from.getBoundingClientRect() : null;
-      let x = r ? r.left : m.x, y = r ? r.bottom + 4 : m.y;
+      const x0 = r ? r.left : m.x, y0 = r ? r.bottom + 4 : m.y;
+      let x = x0, y = y0;
       if (x + w > innerWidth - 8) x = Math.max(8, (r ? r.right : m.x) - w);
       // below if it fits, else above if it fits there; else on the roomier side, scrolling, so it
       // never covers the button that opened it
@@ -250,7 +308,8 @@ export function MenuHost() {
         else if (above > below) { maxH = above; y = 8; }
         else maxH = below;
       }
-      setPos({ x, y, maxH });
+      // it grows from the corner nearest the button, whichever way it had to turn to fit
+      setPos({ x, y, maxH, origin: `${y !== y0 ? 'bottom' : 'top'} ${x !== x0 ? 'right' : 'left'}` });
     };
     place();
     // a press on the button that opened it is left to that button's click, which closes it
@@ -314,12 +373,14 @@ export function MenuHost() {
   return (
     <div
       ref={box}
-      class="menu"
+      class={pos ? 'menu placed' : 'menu'}
       role="menu"
-      style={{ left: `${pos?.x ?? m.x}px`, top: `${pos?.y ?? m.y}px`, maxHeight: pos?.maxH ? `${pos.maxH}px` : '', visibility: pos ? 'visible' : 'hidden' }}
+      style={{ left: `${pos?.x ?? m.x}px`, top: `${pos?.y ?? m.y}px`, maxHeight: pos?.maxH ? `${pos.maxH}px` : '', visibility: pos ? 'visible' : 'hidden', transformOrigin: pos?.origin }}
       onKeyDown={(e) => {
         // keys in a menu are the menu's: Space on an item mustn't also press something behind the menu
         e.stopPropagation();
+        // nor, in a menu, its first item
+        if (e.key === 'Enter' && e.repeat) e.preventDefault();
         if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closeMenu(); m.from?.focus(); }
         else if (e.key === 'ArrowDown') { e.preventDefault(); move(1); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1); }
@@ -337,7 +398,7 @@ export function MenuHost() {
             disabled={it.disabled}
             onClick={() => {
               // back to the button that opened it first, so a dialog the item opens returns focus there
-              closeMenu(); m.from?.focus({ preventScroll: true }); play(it.danger ? 'remove' : 'tap'); it.run();
+              closeMenu(); overlayGone(); m.from?.focus({ preventScroll: true }); play(it.danger ? 'remove' : 'tap'); it.run();
             }}
           >
             {it.icon && <Icon name={it.icon} size={17} />}

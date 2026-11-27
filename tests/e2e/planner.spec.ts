@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { expect, open, overlaps, reload, saved, still, tabTo, test } from './app.ts';
+import { expect, go, open, overlaps, reload, saved, still, tabTo, test } from './app.ts';
 
 const answers = (page: Page) => page.locator('.answers:not(.stale)');
 const comps = (page: Page) => page.locator('.comps > li');
@@ -29,6 +29,7 @@ const settledAnswers = async (page: Page, line?: string) => {
   if (line) await expect(page.locator('.answers-head')).toContainText(line, { timeout: 10_000 });
   await expect(page.locator('.answers[aria-busy=true], .working')).toHaveCount(0, { timeout: 30_000 });
   await expect(comps(page).first()).toBeVisible();
+  await still(page);
 };
 
 test('ask for a map, side and rank, and get comps with pros and cons, plays and tips', async ({ page, errors }) => {
@@ -138,6 +139,85 @@ test('two comps compare side by side: fits, how each wins, what each covers, and
   await expect(d).toContainText('Both sides show the same comp');
   await page.keyboard.press('Escape');
   await expect(d).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('a smaller party says which choices no longer fit, instead of dropping them quietly', async ({ page, errors }) => {
+  await open(page, 'planner');
+  await chooseAgents(page, 'Agents the team must play', ['Jett', 'Omen', 'Sova', 'Killjoy']);
+  await question(page).getByRole('group', { name: 'Controllers: how many' }).getByRole('button', { name: '2' }).click();
+  await settledAnswers(page, 'two controllers');
+  await question(page).getByRole('group', { name: 'Party size' }).getByRole('button', { name: 'Duo' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'A duo plays two agents, so Sova and Killjoy came off the list. The role counts don’t fit a duo, so they’re back to Any.' })).toBeVisible();
+  await settledAnswers(page, 'duo · with Jett and Omen');
+  await expect(question(page).getByRole('group', { name: 'Controllers: how many' }).getByRole('button', { name: 'Any' })).toHaveAttribute('aria-pressed', 'true');
+  expect(errors).toEqual([]);
+});
+
+test('a five-stack says the teammates locked in came off, and a saved duo says which must-plays no longer fit', async ({ page, errors }) => {
+  await open(page, 'planner');
+  const size = question(page).getByRole('group', { name: 'Party size' });
+  await size.getByRole('button', { name: 'Solo' }).click();
+  await chooseAgents(page, 'Teammates locked in', ['Jett', 'Omen']);
+  await settledAnswers(page, 'solo');
+  await size.getByRole('button', { name: 'Five-stack' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'A five-stack has no random teammates, so Jett and Omen came off Teammates locked in.' })).toBeVisible();
+  await settledAnswers(page, 'five-stack');
+  // a saved duo, picked from the Saved party menu, can't keep four must-plays or two controllers either
+  await go(page, 'saved/parties');
+  await page.getByRole('button', { name: 'Make a party' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Make a party' });
+  await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Night duo');
+  await dialog.getByRole('button', { name: 'Make the party' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await go(page, 'planner');
+  await chooseAgents(page, 'Agents the team must play', ['Jett', 'Omen', 'Sova', 'Killjoy']);
+  await question(page).getByRole('group', { name: 'Controllers: how many' }).getByRole('button', { name: '2' }).click();
+  await settledAnswers(page, 'two controllers');
+  await question(page).getByRole('button', { name: 'Saved party' }).click();
+  await page.getByRole('menuitem', { name: /Night duo/ }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'A duo plays two agents, so Sova and Killjoy came off the list. The role counts don’t fit a duo, so they’re back to Any.' })).toBeVisible();
+  await settledAnswers(page, 'duo');
+  expect(errors).toEqual([]);
+});
+
+test('changing how many comps to show takes effect on the Planner’s answer already there', async ({ page, errors }) => {
+  await open(page, 'planner');
+  await settledAnswers(page);
+  await expect(comps(page)).toHaveCount(10);
+  await page.evaluate(() => { location.hash = '#/settings/resultCount'; });
+  const count = page.locator('input[aria-label="Comps to show"]');
+  await count.fill('5');
+  await count.press('Enter');
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Planner' }).click();
+  await settledAnswers(page);
+  await expect(comps(page)).toHaveCount(5);
+  expect(errors).toEqual([]);
+});
+
+test('the arrow keys move along a row of choices and through a list of plays, as Help → Keyboard says', async ({ page, errors }) => {
+  await open(page, 'planner');
+  const side = question(page).getByRole('group', { name: 'Side' });
+  await tabTo(page, side.getByRole('button', { name: 'Attack' }));
+  await page.keyboard.press('ArrowRight');
+  await expect(side.getByRole('button', { name: 'Defense' })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(side.getByRole('button', { name: 'Best' })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(side.getByRole('button', { name: 'Both' })).toBeFocused();
+  // focus moves, and Enter chooses
+  await expect(side.getByRole('button', { name: 'Both' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Enter');
+  await expect(side.getByRole('button', { name: 'Defense' })).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(() => { location.hash = '#/maps/ascent/plays'; });
+  const hits = page.getByRole('listbox', { name: 'Hits' });
+  const first = hits.getByRole('option').first();
+  await tabTo(page, first);
+  await page.keyboard.press('ArrowDown');
+  await expect(hits.getByRole('option').nth(1)).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(first).toBeFocused();
   expect(errors).toEqual([]);
 });
 
@@ -287,6 +367,19 @@ test('teammates already locked in are part of every team and never in your party
   expect(errors).toEqual([]);
 });
 
+test('with one random teammate left to pick, the party box speaks of them as one, and the answers name who’s locked in', async ({ page, errors }) => {
+  await open(page, 'planner');
+  await settledAnswers(page, 'Any map');
+  await question(page).getByRole('group', { name: 'Party size' }).getByRole('button', { name: 'Solo' }).click();
+  await chooseAgents(page, 'Agents your teammates locked in', ['Jett', 'Omen', 'Sova']);
+  await settledAnswers(page, 'solo · Jett, Omen and Sova locked in');
+  const box = comps(page).first().locator('.party-box');
+  await expect(box.locator('p').first()).toHaveText(/^You play .+\. If your random teammate plays [A-Z][\w/]+, the team fits \d+ out of 100/);
+  await expect(box).not.toContainText('teammates play');
+  await expect(box).not.toContainText('Ask your teammates');
+  expect(errors).toEqual([]);
+});
+
 test('the question is kept: a reload brings back the same question and answers', async ({ page, errors }) => {
   await open(page, 'planner');
   await chooseMap(page, 'Lotus');
@@ -329,5 +422,116 @@ test('the Planner works from the keyboard alone', async ({ page, errors }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Agents the team must play: choose' })).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test('opening a comp below the open one keeps its head where it was clicked', async ({ page, errors }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, 'planner');
+  await chooseMap(page, 'Haven');
+  await settledAnswers(page);
+  await expect(comps(page).first()).toHaveClass(/open/);
+  const head = comps(page).nth(2).locator('.comp-head');
+  await head.scrollIntoViewIfNeeded();
+  const before = (await head.boundingBox())!.y;
+  await head.click();
+  await expect(head).toHaveAttribute('aria-expanded', 'true');
+  expect(Math.abs((await head.boundingBox())!.y - before)).toBeLessThan(2);
+  expect(errors).toEqual([]);
+});
+
+test('with fit scores as numbers off, the party box, Why not, Compare, Copy and Print name tiers instead', async ({ page, errors }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { copied: string[]; printed: number };
+    w.copied = []; w.printed = 0;
+    window.print = () => { w.printed++; };
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => { w.copied.push(t); } } });
+  });
+  await open(page, 'settings/planner');
+  const numbers = page.getByRole('switch', { name: 'Show fit scores as numbers' });
+  await numbers.focus();
+  await page.keyboard.press('Space');
+  await expect(numbers).not.toBeChecked();
+  await go(page, 'planner');
+  await chooseMap(page, 'Ascent');
+  await question(page).getByRole('group', { name: 'Party size' }).getByRole('button', { name: 'Solo' }).click();
+  await settledAnswers(page, 'solo');
+  // a fit said with a number: "fits 87", "fit 99", "about 83", "out of 100", "(91)"
+  const said = /\bfits? (about )?\d|expect about \d|out of 100|\(\d+\)|give or take/i;
+  const box = comps(page).first().locator('.party-box');
+  await expect(box).toBeVisible();
+  await expect(box.locator('p').first()).toHaveText(/^You play .+\. If your random teammates play .+, the team is tier [SABCD]\. If they pick on their own, expect a tier [SABCD] team\.$/);
+  expect(await box.textContent()).not.toMatch(said);
+  // the role to ask for names the team it makes the same way ("expect a tier A team")
+  await expect(box.locator('p').nth(1)).toHaveText(/, and with one, expect a tier [SABCD] team\./);
+  await expect(box.locator('.party-team .num').first()).toHaveText(/^Tier [SABCD]$/);
+  await page.screenshot({ path: test.info().outputPath('party-box.png') });
+
+  // Copy and Print say the tier
+  const first = comps(page).first();
+  await first.getByRole('button', { name: 'Copy' }).click();
+  await page.getByRole('menuitem', { name: 'The whole plan' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Copied the plan.' })).toBeVisible();
+  const text = await page.evaluate(() => (window as unknown as { copied: string[] }).copied[0] ?? '');
+  expect(text).toMatch(/\nComp: .+\. Tier [SABCD]\.\n/);
+  expect(text).not.toMatch(said);
+  await first.getByRole('button', { name: 'Print' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { printed: number }).printed)).toBe(1);
+  const sheet = page.locator('#print-sheet');
+  await expect(sheet.locator('.sheet-fit')).toContainText(/Tier [SABCD]/);
+  expect(await sheet.textContent()).not.toMatch(said);
+  await page.evaluate(() => dispatchEvent(new Event('afterprint')));
+
+  // a five-stack's Agents tab: Why not, and what an agent adds over the next best of their role
+  await question(page).getByRole('group', { name: 'Party size' }).getByRole('button', { name: 'Five-stack' }).click();
+  await settledAnswers(page, 'five-stack');
+  await page.getByRole('tab', { name: 'Agents' }).click();
+  const rows = page.locator('.agent-row');
+  // open agents until one isn't in the best comp, so it has a Why not
+  for (let i = 0; i < 12 && !(await page.locator('.why-not').count()); i++) await rows.nth(i).click();
+  const why = page.locator('.why-not');
+  await expect(why).toContainText(/^Why not .+ in the best comp\? .+’s best comp plays .+ instead of .+, and (fits as well as the best|is tier [SABCD], the same tier as the best comp|is tier [SABCD] where the best comp is tier [SABCD])\./);
+  expect(await page.locator('.agent-more').textContent()).not.toMatch(/\d+ ahead of|do \d+ better|\bfits? \d|against \d/);
+  await page.screenshot({ path: test.info().outputPath('why-not.png') });
+
+  // Compare says the tiers too
+  await page.getByRole('tab', { name: 'Comps', exact: true }).click();
+  await comps(page).first().getByRole('button', { name: 'Compare' }).click();
+  const d = page.getByRole('dialog', { name: 'Compare comps' });
+  await d.getByRole('combobox', { name: 'Second comp' }).selectOption('4');
+  await expect(d.locator('.why-not p').first()).toHaveText(/^The second comp plays .+ instead of .+, and (fits as well|is tier [SABCD] too|is tier [SABCD] where the first is tier [SABCD])\.$/);
+  await page.keyboard.press('Escape');
+
+  // a fit that's less sure says why, without how many points it could be off by
+  await go(page, 'rankings');
+  const hush = page.locator('.tier-agent').filter({ hasText: 'Hush' });
+  await expect(hush).toHaveAttribute('data-tip', /This fit is less sure, since /);
+  expect(await hush.getAttribute('data-tip')).not.toMatch(/off by|\bfit \d/);
+  expect(errors).toEqual([]);
+});
+
+test('a newer question while one is still being worked out keeps the same worker, and gets its answer', async ({ page, errors }) => {
+  // counts the workers the page starts and stops
+  await page.addInitScript(() => {
+    const w = window as unknown as { __workers: { made: number; ended: number } };
+    w.__workers = { made: 0, ended: 0 };
+    const Base = Worker;
+    window.Worker = class extends Base {
+      constructor(url: string | URL, o?: WorkerOptions) { super(url, o); w.__workers.made++; }
+      override terminate() { w.__workers.ended++; super.terminate(); }
+    };
+  });
+  await open(page, 'planner');
+  await chooseMap(page, 'Find the best map');
+  await question(page).getByRole('group', { name: 'Party size' }).getByRole('button', { name: 'Duo' }).click();
+  await settledAnswers(page);
+  const counts = () => page.evaluate(() => (window as unknown as { __workers: { made: number; ended: number } }).__workers);
+  const start = await counts();
+  // each rank asked while the one before is still being worked out (a duo's best map takes a second or so)
+  const rank = question(page).getByRole('combobox', { name: 'Rank' });
+  for (const r of ['Platinum', 'Diamond', 'Ascendant']) { await rank.selectOption({ label: r }); await page.waitForTimeout(250); }
+  await rank.selectOption({ label: 'Immortal' });
+  await settledAnswers(page, 'Immortal');
+  expect(await counts()).toEqual(start);
   expect(errors).toEqual([]);
 });

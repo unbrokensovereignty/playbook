@@ -67,6 +67,8 @@ export const FIT = { pro: 0.07, solo: 0.06, skill: 0.01, win: 0.004 };
  * Gold. By `until`, players have the mechanics for them. The hardest (`skill` from `full.skill`:
  * Neon, Astra, Yoru and Hush) cost all of it through `full.until`, since guides tell players to learn
  * them later still at Silver and Gold (Sequel, GAMES.GG; iTechGuides on Hush), and fade from there.
+ * What the hard kits win in ranked low down is each rank's own rate (RANK_WIN): Neon's teams win
+ * about half their games at Silver and Gold, though more than half across all ranks.
  */
 export const HARD: { from: number; cost: number; until: RankId; full: { skill: number; until: RankId } } = { from: 0.6, cost: 0.11, until: 'diamond', full: { skill: 0.85, until: 'gold' } };
 
@@ -104,11 +106,27 @@ export const PRO_GAMES = { full: 10, least: 0.5, dated: 0.85 };
 export const ROLE_MIX = 0.08;
 
 /**
- * Ranked win rates are taken across all ranks, so they mostly come from games between Silver and
- * Diamond. They count fully from `from` to `to` (a rank's place from 0 at Iron to 1 at Radiant)
- * and fade in a straight line to `iron` of that at Iron and to `radiant` at Radiant.
+ * How far ranked win rates count at each rank: fully from `from` to `to` (a rank's place from 0 at
+ * Iron to 1 at Radiant), where most ranked games are played, fading in a straight line to `iron` of
+ * that at Iron and to `radiant` at Radiant. Near the top, what pros play counts for more (PRO_RISE),
+ * and Radiant's own rates count for random teams (RADIANT_WIN). Iron has under 1% of ranked games,
+ * so an agent's rate there is still mostly their rate across all ranks (RANK_WIN). Counting rates in
+ * full at Iron would put Brimstone ahead of Omen for a solo player at Bronze, where the solo guides
+ * name Clove and Omen as the controllers to climb with.
  */
 export const WIN_RANKS = { iron: 0.5, from: 0.25, to: 0.625, radiant: 0.2 };
+
+/**
+ * Ranked win rates rank by rank (kb/ranked.ts, Iron to Immortal). An agent's rate at a rank counts
+ * as far as it differs from their rate across all ranks, and only for the share games / (games +
+ * `games`) of that difference, games being how many games at the rank have the agent in them: with
+ * fewer, most of it is chance. Over all twenty agents at each of the eight ranks, each counting as
+ * far as its games let it, the differences beyond chance come to a little under two fifths of a
+ * point (0.38), so it takes this many games to trust half of one. They're widest at Iron (about
+ * 1.4 points: Hush's teams win 4 points fewer games there than across all ranks, Tejo's nearly 4
+ * more) and close to nothing at Platinum and Diamond, where the most games are played.
+ */
+export const RANK_WIN = { games: 17000 };
 
 /**
  * Ranked win rates on each map (kb/mapwins.ts). An agent's rate on a map, moved so the map's average
@@ -184,9 +202,17 @@ export const KIT_RULE_NOTE = { gain: 0.006, most: 2 };
  * How a comp wins, in a line (explain.ts): the strengths it plays through are those the situation
  * needs at least `need` (1 = an average share) and the comp covers at least `cover`, each named by
  * the ability of an agent who brings at least `brings` of it, at most `most` before the plant or
- * retake and one after.
+ * retake and one after. A third part before the plant or retake is named only when its need times
+ * cover is at least `third` of the second part's, so a plan doesn't list three parts by habit.
  */
-export const PLAN_NOTE = { need: 0.8, cover: 0.6, brings: 0.45, most: 3 };
+export const PLAN_NOTE = { need: 0.8, cover: 0.6, brings: 0.45, most: 3, third: 0.92 };
+
+/**
+ * How a con names who brings a strength the comp is short of (explain.ts): it may call one source
+ * the main one, "with a little from" the rest, when each of the others brings at most `main` of what
+ * that one does, as the score counts it.
+ */
+export const SOURCE_NOTE = { main: 0.5 };
 
 /**
  * Why one comp ranks below another (explain.ts): a part of the score counts as a reason when it
@@ -269,14 +295,20 @@ export const RANKED_ROLE: Record<Role, Record<Side, readonly [number, number, nu
   sentinel: { attack: [-0.05, 0, 0, 0, 0], defense: [-0.05, 0, 0, 0, 0] },
 };
 /**
- * What players at Radiant pick in ranked (kb/ranked.ts) pulls a team of random players at the top
- * the way pro play pulls a team that plays together: `share` of the pro pull (FIT.pro), on the same
- * curve, counting from nothing at RADIANT_WIN.from to fully at Radiant and as far as the team is
- * random (PARTY_RANDOM). Players there know the game about as well as anyone, and the agents they
- * pick most also win more than most there: Jett and Clove are on nearly every team and win 51% and
- * 52% of games, while Astra, Harbor and Breach are hardly picked at all.
+ * What ranked players at your rank pick (kb/ranked.ts) pulls a team of random players the way pro
+ * play pulls a team that plays together: `share` of the pro pull (FIT.pro), on the same curve,
+ * counting from nothing at `from` to fully at Radiant and as far as the team is random
+ * (PARTY_RANDOM). Each rank's own picks give way to Radiant's from RADIANT_WIN.from up. A solo
+ * player's teammates are random players at their rank, and from Gold up the controller picked most
+ * there also wins more than most: Clove is the 2nd most picked agent at Gold and 1st from Platinum
+ * to Immortal, while Omen is 8th, 8th, 9th, 11th and 13th (op.gg, patch 13.10), and Clove's teams
+ * win 51.6% of ranked games to Omen's 46.6% (agents.ts). At Radiant, Clove is on about four teams
+ * in five and Chamber on three in five, and their teams win 52% and 51% of games, while Astra,
+ * Harbor and Breach are each on one team in forty or fewer. The pull starts at Silver: at Iron and Bronze, Sage
+ * and Reyna lead the picks, and the reward for working alone (FIT.solo) and the cost of hard kits
+ * (HARD) already lean that way.
  */
-export const RANKED_PULL = { share: 1 };
+export const RANKED_PULL: { share: number; from: RankId } = { share: 1, from: 'silver' };
 /** How much of the team a party leaves to random players (4 of 4 for a solo player, none for a five-stack), which RANKED_ROLE counts. */
 export const PARTY_RANDOM: Record<1 | 2 | 3 | 5, number> = { 1: 1, 2: 0.75, 3: 0.5, 5: 0 };
 

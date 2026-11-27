@@ -2,14 +2,14 @@
  * Settings, drawn from the one settings schema, and your data: backups, restoring and erasing.
  * Changes save as they're made, and Ctrl Z undoes them.
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { PageHead } from '../shell.tsx';
 import { Badge, Button, ColorField, IconButton, Segmented, Select, Slider, Stepper, Toggle } from '../components/controls.tsx';
 import { confirm, UNDO_NOTE } from '../components/overlays.tsx';
 import { Icon } from '../icons.tsx';
 import { data, go, revisit, safely, tabRole, toast, watch } from '../state.ts';
 import { scrollMotion } from '../theme.ts';
-import { play } from '../sound.ts';
+import { play, SOUND_SETS, type SoundSet } from '../sound.ts';
 import { backUpNow, restoreFromFile } from '../backup.tsx';
 import { AgentChips } from '../components/pickers.tsx';
 import { askToKeep, sizeText, storageState, type Kept } from '../storage.ts';
@@ -125,11 +125,11 @@ function DataSection() {
   const today = keyOf(new Date());
   const last = app.lastBackup ? fmtDay(dayKey(app.lastBackup, 0), today) : 'never';
   const reader = tabRole.value === 'reader';
-  const plans = r.plans().length, parties = r.parties().length;
+  const plans = r.plans().length, parties = r.parties().length, plays = r.myPlays().length, games = r.games().length;
   const erase = async () => {
     const yes = await confirm({
       title: 'Erase everything?', danger: true, yes: 'Erase everything',
-      body: <p>This deletes your {plural(plans, 'saved plan')}, {plural(parties, 'party', 'parties')}, themes and settings from this computer. {UNDO_NOTE} To keep a copy for later, back up first.</p>,
+      body: <p>This deletes your {plural(plans, 'saved plan')}, {plural(parties, 'party', 'parties')}, {plural(plays, 'play of your own', 'plays of your own')}, {plural(games, 'logged game')}, themes and settings from this computer. {UNDO_NOTE} To keep a copy for later, back up first.</p>,
     });
     if (yes) safely(() => { r.eraseAll(); toast('Erased everything.', { undo: true }); });
   };
@@ -138,7 +138,7 @@ function DataSection() {
       <div class="setting-row">
         <div class="setting-text">
           <span class="setting-label">Backups</span>
-          <span class="setting-help">A backup file has your saved plans, parties, themes and settings. {last === 'never' ? 'You haven’t made one yet.' : `Your last backup was ${last}.`}</span>
+          <span class="setting-help">A backup file has your saved plans and parties, the plays you drew, the games you logged, your themes and your settings. {last === 'never' ? 'You haven’t made one yet.' : `Your last backup was ${last}.`}</span>
         </div>
         <div class="setting-control">
           <Button icon="export" onClick={backUpNow}>Back up now</Button>
@@ -167,22 +167,33 @@ export function SettingsPage({ arg }: PageProps) {
   const [flash, setFlash] = useState('');
 
   // #/settings/<section or setting> scrolls to it
-  useEffect(() => {
+  // Arriving from another page, the page opens there at once (pages change with no animation); a jump
+  // made while Settings is already showing scrolls, so you see which way it went.
+  const arriving = useRef(true);
+  const unflash = useRef<ReturnType<typeof setTimeout>>();
+  useLayoutEffect(() => {
+    const first = arriving.current;
+    arriving.current = false;
     if (!arg) return;
     const isKey = (SETTING_KEYS as readonly string[]).includes(arg);
-    // a hidden sound setting points at the sound switch; one not in use yet, at its section
-    const key = !isKey || shown(arg as SettingKey, s) ? arg : inUse(arg as SettingKey) ? 'sound' : '';
-    requestAnimationFrame(() => {
+    // a hidden sound setting points at the sound switch, how well you play your agents at the agents
+    // you play (it shows once you've chosen some), and one not in use yet at its section
+    const key = !isKey || shown(arg as SettingKey, s) ? arg : !inUse(arg as SettingKey) ? '' : arg === 'myComfort' ? 'myAgents' : 'sound';
+    const jump = () => {
       const el = document.getElementById(key ? (isKey ? `k-${key}` : `s-${key}`) : `s-${SETTINGS[arg as SettingKey].section}`);
-      el?.scrollIntoView({ block: isKey && key ? 'center' : 'start', behavior: scrollMotion() });
-      if (isKey && key) { setFlash(key); setTimeout(() => setFlash(''), 1600); }
-    });
+      el?.scrollIntoView({ block: isKey && key ? 'center' : 'start', behavior: first ? 'instant' : scrollMotion() });
+      if (isKey && key) { setFlash(key); clearTimeout(unflash.current); unflash.current = setTimeout(() => setFlash(''), 1600); }
+    };
+    // after the shell has put the new page at the top, and before it's drawn
+    if (first) queueMicrotask(jump); else requestAnimationFrame(jump);
   }, [arg, revisit.value]);
 
   const save = (k: SettingKey, v: unknown) => safely(() => {
     if (!r.setSetting(k, v as never)) { toast('That value can’t be used.', { tone: 'bad' }); return; }
-    // a new sound set plays a little of itself once it's in use
-    if (k === 'soundSet') setTimeout(() => play('ready'), 60);
+    // a new sound set plays a little of itself, in the same moment the choice changes
+    if (k === 'soundSet' && SOUND_SETS.includes(v as SoundSet)) play('ready', { set: v as SoundSet });
+    // the switch was silent while sound was off, so turning it on clacks once it can be heard
+    if (k === 'sound' && v === true) play('toggle');
   });
   const reset = (k: SettingKey) => safely(() => r.resetSetting(k));
   const keysIn = (sec: SectionId) => SETTING_KEYS.filter((k) => (SETTINGS[k] as SettingDef).section === sec && shown(k, s));

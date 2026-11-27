@@ -1,27 +1,28 @@
 /**
- * The frame around every page: the sidebar, the page area with its slide between pages, banners
+ * The frame around every page: the sidebar, the page area, banners
  * about saving, and the keys that work everywhere.
  */
 import type { ComponentChildren } from 'preact';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { Icon, type IconName } from './icons.tsx';
 import { Button, IconButton, Kbd } from './components/controls.tsx';
-import { DialogHost, MenuHost, ToastHost, openMenu, type MenuItem } from './components/overlays.tsx';
+import { DialogHost, MenuHost, ToastHost, openMenu, overlayGone, type MenuItem } from './components/overlays.tsx';
 import { Palette, type Command } from './components/palette.tsx';
 import { checkWhatsNew } from './components/whatsnew.tsx';
 import { openSetup, setupDue } from './setup.tsx';
 import {
-  backendKind, canRedo, canUndo, data, dialogs, go, minute, overlayOpen, paletteOpen, quarantinedCount, route, routeDir,
+  backendKind, canRedo, canUndo, data, dialogs, go, minute, overlayOpen, paletteOpen, quarantinedCount, route,
   safely, saveError, saveState, sidebarNarrow, tabRole, takeOverTab, toggleSidebar, editsText, watch, watchClicks, type Page,
 } from './state.ts';
 import { inUse, SECTIONS, SETTING_KEYS, SETTINGS } from '../core/settings.ts';
 import { PAGE_VIEWS } from './pages/index.ts';
 import { play } from './sound.ts';
 import { systemDark } from './theme.ts';
-import { redo, undo } from './undo.ts';
+import { pageHistory, redo, undo } from './undo.ts';
 import { keepFocus } from './focuskeep.ts';
 import { AGENTS_BY_NAME } from '../core/kb/agents.ts';
 import { mapById, MAPS } from '../core/kb/maps.ts';
+import { partyQuery } from '../core/saved.ts';
 import { playsLink } from './myplays.ts';
 import { ROLES } from '../core/kb/roles.ts';
 import { askedLine, askedTitle } from './planner/words.ts';
@@ -132,8 +133,8 @@ function Sidebar() {
       <div class="sidebar-foot">
         <div class="foot-row">
           <SaveIndicator />
-          <IconButton icon="undo" size="sm" label="Undo (Ctrl Z)" disabled={!canUndo.value} onClick={undo} sound={false} tipSide={narrow ? 'right' : undefined} />
-          <IconButton icon="redo" size="sm" label="Redo (Ctrl Shift Z)" disabled={!canRedo.value} onClick={redo} sound={false} tipSide={narrow ? 'right' : undefined} />
+          <IconButton icon="undo" size="sm" label="Undo (Ctrl Z)" disabled={!(pageHistory.value?.canUndo ?? canUndo.value)} onClick={undo} sound={false} tipSide={narrow ? 'right' : undefined} />
+          <IconButton icon="redo" size="sm" label="Redo (Ctrl Shift Z)" disabled={!(pageHistory.value?.canRedo ?? canRedo.value)} onClick={redo} sound={false} tipSide={narrow ? 'right' : undefined} />
         </div>
       </div>
     </nav>
@@ -201,7 +202,7 @@ function commands(): Command[] {
   for (const p of r.myPlays()) out.push({ id: `myplay-${p.id}`, group: 'Plays', label: p.name, icon: 'draw', hint: `Your play on ${mapById(p.map)?.name ?? p.map}`, run: () => go('maps', playsLink(p.map, p.id)) });
   for (const m of MAPS) out.push({ id: `plan-${m.id}`, group: 'Plan for', label: `Plan for ${m.name}`, icon: 'planner', keywords: 'comp best team', run: () => planWith({ map: m.id }) });
   for (const p of r.plans()) out.push({ id: `saved-${p.id}`, group: 'Saved plans', label: p.name, icon: 'bookmark', hint: askedTitle(p.query), run: () => go('saved', p.id) });
-  for (const p of r.parties()) out.push({ id: `party-${p.id}`, group: 'Parties', label: `Plan for ${p.name}`, icon: 'users', run: () => planWith({ party: p.players.length as 2 | 3 | 5, pools: p.players.map((x) => x.agents) }) });
+  for (const p of r.parties()) out.push({ id: `party-${p.id}`, group: 'Parties', label: `Plan for ${p.name}`, icon: 'users', run: () => planWith(partyQuery(p)) });
   const s = r.settings();
   const dark = s.themeMode === 'dark' || (s.themeMode === 'system' && systemDark.value);
   const acts: Omit<Command, 'group'>[] = [
@@ -226,21 +227,47 @@ function commands(): Command[] {
 
 // ---------------------------------------------------------------- keys that work everywhere
 
+/**
+ * The arrow keys move along a row of choices (a switch like Side) and through a list to pick from
+ * (the plays, the maps, the situations compared), as Help → Keyboard says, and Home and End go to
+ * either end. Focus moves; choosing is still Enter or Space.
+ */
+function moveAmong(e: KeyboardEvent): boolean {
+  const t = e.target;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !(t instanceof HTMLButtonElement)) return false;
+  const row = t.parentElement?.classList.contains('segmented') ? t.parentElement : t.getAttribute('role') === 'option' ? t.closest('[role=listbox]') : null;
+  if (!row) return false;
+  const steps: Record<string, number> = row.getAttribute('role') === 'listbox' ? { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 } : { ArrowRight: 1, ArrowLeft: -1 };
+  const all = [...row.querySelectorAll<HTMLButtonElement>(row.getAttribute('role') === 'listbox' ? '[role=option]' : ':scope > button')].filter((b) => !b.disabled);
+  const at = all.indexOf(t);
+  const to = e.key === 'Home' ? all[0] : e.key === 'End' ? all.at(-1) : steps[e.key] ? all[at + steps[e.key]!] : undefined;
+  if (!(e.key in steps) && e.key !== 'Home' && e.key !== 'End') return false;
+  // at either end it stays put, and the key does nothing else (the page doesn't scroll instead)
+  e.preventDefault();
+  to?.focus();
+  return true;
+}
+
 function onKey(e: KeyboardEvent) {
+  if (moveAmong(e)) return;
   const mod = e.ctrlKey || e.metaKey;
   const key = e.key.toLowerCase();
   if (mod && key === 'k') {
     e.preventDefault();
-    if (!dialogs.value.length) paletteOpen.value = !paletteOpen.value;
+    // a held Ctrl K opens or closes the search once, instead of flashing it on and off
+    if (!e.repeat && !dialogs.value.length) paletteOpen.value = !paletteOpen.value;
     return;
   }
+  // a held / opens the search once: its repeats don't go on to type slashes into the box
+  if (e.key === '/' && e.repeat && paletteOpen.value) { e.preventDefault(); return; }
   // a text field keeps its own keys (and its own undo); a switch, slider or checkbox leaves them to the app,
   // and a list box too, except the letters it picks by
   if (overlayOpen() || editsText(e.target)) return;
   const picks = e.target instanceof HTMLSelectElement;
   if (mod && !e.altKey && ((key === 'z' && e.shiftKey) || key === 'y')) { e.preventDefault(); redo(); }
   else if (mod && !e.altKey && key === 'z') { e.preventDefault(); undo(); }
-  else if (mod && key === '\\') { e.preventDefault(); toggleSidebar(); }
+  // a held Ctrl \ folds or opens the sidebar once, instead of flashing the page between the two
+  else if (mod && key === '\\') { e.preventDefault(); if (!e.repeat) toggleSidebar(); }
   else if (!mod && !e.altKey && !picks && e.key === '?') { e.preventDefault(); go('help', 'keys'); }
   else if (!mod && !e.altKey && !picks && e.key === '/') { e.preventDefault(); paletteOpen.value = true; }
 }
@@ -263,7 +290,10 @@ export function App() {
     const stopKeeping = keepFocus(), stopWatching = watchClicks();
     return () => { removeEventListener('keydown', onKey); stopKeeping(); stopWatching(); };
   }, []);
-  useLayoutEffect(() => { main.current?.scrollTo({ top: 0 }); }, [page]);
+  // a new page, or one agent or map opened from its list, starts at the top; a tab or a saved plan keeps its place
+  const view = page === 'agents' || page === 'maps' ? `${page}/${arg.split('/').slice(0, 2).join('/')}` : page;
+  // and the second press of a double click that opened it doesn't go on to press or select what's now under the pointer
+  useLayoutEffect(() => { main.current?.scrollTo({ top: 0, behavior: 'instant' }); overlayGone(); }, [view]);
   // a new version's note waits until a page has settled
   useEffect(() => { const t = setTimeout(checkWhatsNew, 900); return () => clearTimeout(t); }, [page]);
   const View = PAGE_VIEWS[page];
@@ -271,7 +301,7 @@ export function App() {
     <div class={`shell${sidebarNarrow.value ? ' narrow' : ''}`}>
       <Sidebar />
       <main class="main" ref={main} id="main">
-        <div class={`page${routeDir.value < 0 ? ' back' : ''}${WIDE.includes(page) ? ' wide' : ''}`} key={page}>
+        <div class={`page${WIDE.includes(page) ? ' wide' : ''}`} key={page}>
           <Banners />
           <View arg={arg} />
         </div>

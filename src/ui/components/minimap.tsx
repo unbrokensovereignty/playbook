@@ -35,7 +35,7 @@ export interface Route { route: readonly string[]; label?: string; who?: readonl
  * A replay: the moment on show (`at`, the routes of later moments not walked yet), and a count that
  * starts the moment's walk again each time it changes.
  */
-export interface Replay { at: number; run: number }
+export interface Replay { at: number; run: number; paused?: boolean }
 /**
  * The Spike, planted: where (`at`), what the spot is (`about`), and the moment of a replay it's down
  * from (`when`, 0 first); with `end`, it goes down as that moment's walk ends, when the players get there.
@@ -59,6 +59,13 @@ export type TextSize = (typeof TEXT_SIZES)[number][0];
 /** How far a minimap zooms in, at most, and each step of the buttons and keys. */
 export const ZOOM = { most: 5, step: 1.4 };
 
+/**
+ * How far the pointer can wander between press and release and still be a click on the map, not a drag: a
+ * mouse holds still, a pen or a finger wobbles more as it lifts (about what the system allows for each).
+ */
+const SLOP = { mouse: 4, other: 10 };
+const slopOf = (e: PointerEvent): number => (e.pointerType === 'mouse' ? SLOP.mouse : SLOP.other);
+
 /** How callouts show on the minimaps, as the viewer last chose: kept like the other views. */
 export function useMapView() {
   const yes = (v: string) => v === 'yes' || v === 'no';
@@ -78,7 +85,7 @@ export function useMapView() {
   };
 }
 
-export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', label, onFocus, zoomable = false, layers = [], plain = false, replay, spike, onSpot, children }: {
+export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', label, onFocus, zoomable = false, layers = [], plain = false, replay, onWalked, spike, onSpot, children }: {
   map: string;
   routes?: readonly Route[];
   /** The step to bring forward (the others fade), or -1 for none. */
@@ -95,6 +102,8 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
   plain?: boolean;
   /** Run the routes as a replay, up to a moment (see Replay). */
   replay?: Replay | undefined;
+  /** A replay's moment has been walked to its end. */
+  onWalked?: () => void;
   /** The Spike where it's planted, shown from its moment in a replay and always otherwise. */
   spike?: SpikeMark | undefined;
   /** Clicking the map picks the callout nearest the click (drawing a play): its name. */
@@ -106,14 +115,21 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
   const view = useMapView();
   const scale = plain ? 1 : view.scale, dots = plain || view.dots;
   const [z, setZ] = useState(1);
+  // the zoom right now, even between renders, so wheel events in one frame add up
+  const zr = useRef(1);
+  zr.current = z;
+  // when the page last scrolled: a wheel passing over the map keeps scrolling it
+  const scrolledAt = useRef(0);
+  const zoomedAt = useRef(0); // when the wheel last zoomed the map
   const [pan, setPan] = useState<Spot>([0, 0]);
   const [full, setFull] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number; pan: Spot } | null>(null);
-  // a drag that moved the map isn't a click on it
+  // a drag that moved the map isn't a click on it, and nor is one that couldn't (zoomed out, it has nowhere to go)
   const moved = useRef(false);
+  const downAt = useRef<[number, number, number]>([0, 0, SLOP.mouse]);
   const map = mapById(id);
   const art = minimapOf(id);
   // a new map starts zoomed out
@@ -136,30 +152,67 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
   const clampPan = (p: Spot, k: number): Spot => [Math.min(0, Math.max(1 - k, p[0])), Math.min(0, Math.max(1 - k, p[1]))];
   /** Zooms to `k`, keeping the point at (`fx`, `fy`) of the frame where it is. */
   const zoomTo = (k: number, fx = 0.5, fy = 0.5) => {
+    const was = zr.current;
     const next = Math.min(ZOOM.most, Math.max(1, k));
-    setPan((p) => clampPan([fx - ((fx - p[0]) * next) / z, fy - ((fy - p[1]) * next) / z], next));
+    zr.current = next;
+    setPan((p) => clampPan([fx - ((fx - p[0]) * next) / was, fy - ((fy - p[1]) * next) / was], next));
     setZ(next);
   };
   const moveBy = (dx: number, dy: number) => setPan((p) => clampPan([p[0] + dx, p[1] + dy], z));
 
-  // the wheel zooms (a listener of its own, so it can keep the page from scrolling)
+  // the page (or a panel on it, like a saved plan) was scrolling: a wheel that passes over the map
+  // carries on scrolling it. Scrolls don't bubble, but a capturing listener hears every scroller.
+  useEffect(() => {
+    if (!zoomable) return;
+    const on = () => { scrolledAt.current = performance.now(); };
+    document.addEventListener('scroll', on, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', on, { capture: true });
+  }, [zoomable]);
+  // the wheel zooms as far as it turns: a mouse notch (about 100) is half a step, a trackpad's small
+  // moves less, and a pinch zooms the way the browser does (a listener of its own, so it can keep
+  // the page from scrolling)
   useEffect(() => {
     const el = box.current;
     if (!zoomable || !el) return;
     const onWheel = (e: WheelEvent) => {
-      const k = z * (e.deltaY < 0 ? ZOOM.step ** 0.5 : 1 / ZOOM.step ** 0.5);
-      if ((k < 1 && z === 1) || (k > ZOOM.most && z === ZOOM.most)) return;
-      e.preventDefault();
+      if (!e.ctrlKey && performance.now() - scrolledAt.current < 400) return;
+      const dy = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 100 : 1);
+      if (!dy) return;
+      const f = e.ctrlKey ? Math.exp(-dy / 100) : (ZOOM.step ** 0.5) ** Math.max(-1, Math.min(1, -dy / 100));
+      const now = zr.current;
+      const t = performance.now();
+      if (f < 1 && now === 1) {
+        // zoomed out already: the page scrolls on, unless this is the tail of a zoom or a pinch,
+        // which stay with the map (an unheld pinch would zoom the whole page)
+        // each held event keeps the hold going, so a long trackpad tail stays on the map to its end
+        if (e.ctrlKey || t - zoomedAt.current < 200) { e.preventDefault(); zoomedAt.current = t; }
+        return;
+      }
+      e.preventDefault(); // at the top too, so the page doesn't move in the middle of a zoom
+      zoomedAt.current = t;
+      if (f > 1 && now === ZOOM.most) return;
       const r = el.getBoundingClientRect();
-      zoomTo(k, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+      zoomTo(now * f, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
-  });
+  }, [zoomable]);
 
   // each route's way along the floor, for drawing it and for walking its players along it in a replay
   const paths = useMemo(() => (map ? routes.map((r) => pathOf(r, map)) : []), [map?.id, routes.map((r) => r.route.join('>')).join('|')]);
   const run = replay && replay.at >= 0 ? replay : undefined;
+  // a paused replay holds its walk where it is (read each frame, so pausing never starts it over)
+  const paused = useRef(false);
+  paused.current = !!run?.paused;
+  const resume = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (run?.paused || !resume.current) return;
+    const go = resume.current;
+    resume.current = null;
+    go();
+  }, [run?.paused]);
+  const walkedOut = useRef(onWalked);
+  walkedOut.current = onWalked;
   // a moment's walk: its routes draw in as their players walk them, and their utility lands as each arrives
   useLayoutEffect(() => {
     const root = svg.current;
@@ -195,18 +248,21 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
     if (motion !== 'full') {
       // without movement, the moment shows at once and its utility fades in
       set(1);
+      walkedOut.current?.();
       return;
     }
     set(0);
-    let frame = 0;
-    const start = performance.now();
+    let frame = 0, walked = 0, last = performance.now();
     const tick = (time: number) => {
-      const t = Math.min(1, (time - start) / REPLAY_MS);
-      set(t);
-      if (t < 1) frame = requestAnimationFrame(tick);
+      // paused, the walk stops asking for frames until Go on starts it again
+      if (paused.current) { resume.current = () => { last = performance.now(); frame = requestAnimationFrame(tick); }; return; }
+      walked += time - last; last = time;
+      set(Math.min(1, walked / REPLAY_MS));
+      if (walked < REPLAY_MS) frame = requestAnimationFrame(tick);
+      else walkedOut.current?.();
     };
     frame = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(frame); set(1); };
+    return () => { cancelAnimationFrame(frame); resume.current = null; set(1); };
   }, [run?.at, run?.run, paths, spike?.when, spike?.end]);
 
   if (!map) return null;
@@ -236,6 +292,7 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
   };
   const onDown = (e: PointerEvent) => {
     moved.current = false;
+    downAt.current = [e.clientX, e.clientY, slopOf(e)];
     if (!zoomable || z === 1 || e.button !== 0) return;
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, pan };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -244,10 +301,10 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
     const d = drag.current, el = box.current;
     if (!d || d.id !== e.pointerId || !el) return;
     const r = el.getBoundingClientRect();
-    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) moved.current = true;
+    if (!moved.current && Math.hypot(e.clientX - d.x, e.clientY - d.y) > downAt.current[2]) { moved.current = true; el.classList.add('panning'); }
     setPan(clampPan([d.pan[0] + (e.clientX - d.x) / r.width, d.pan[1] + (e.clientY - d.y) / r.height], z));
   };
-  const onUp = (e: PointerEvent) => { if (drag.current?.id === e.pointerId) drag.current = null; };
+  const onUp = (e: PointerEvent) => { if (drag.current?.id === e.pointerId) { drag.current = null; box.current?.classList.remove('panning'); } };
   /** The callout nearest a click, for drawing a play (the map's own units, whatever the zoom). */
   const pick = (e: MouseEvent) => {
     const r = svg.current?.getBoundingClientRect();
@@ -291,7 +348,7 @@ export function Minimap({ map: id, routes = [], focus = -1, labels = 'routes', l
         ref={box} class={`minimap zoomable${z > 1 ? ' zoomed' : ''}${onSpot ? ' picking' : ''}`} tabIndex={0} role="group"
         aria-label={`${name}. Zoom with plus and minus, move with the arrow keys, and 0 zooms back out.${canFull ? ' F fills the screen.' : ''}`}
         onKeyDown={onKey} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
-        onClick={(e) => { if (!moved.current) pick(e); }}
+        onClick={(e) => { const [x, y, slop] = downAt.current; if (!moved.current && Math.hypot(e.clientX - x, e.clientY - y) <= slop) pick(e); }}
         onDblClick={(e) => { if (onSpot) return; const r = box.current!.getBoundingClientRect(); zoomTo(z * ZOOM.step, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); }}>
         {stage}
       </div>

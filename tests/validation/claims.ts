@@ -64,6 +64,8 @@ export const SOURCES = {
   dodgeFracture: { name: 'dodge.gg, Best agents and weapons for Fracture (2026)', url: 'https://www.dodge.gg/en-US/valorant/news/fracture-map-guide-2026', date: '2026-03-21' },
   dodgeSunset: { name: 'dodge.gg, Best agents and weapons for Sunset (2026)', url: 'https://www.dodge.gg/en-US/valorant/news/sunset-map-guide-2026', date: '2026-03-21' },
   dodgeLotus: { name: 'dodge.gg, Best agents and weapons for Lotus (2026)', url: 'https://www.dodge.gg/news/valorant/lotus-map-guide-2026', date: '2026' },
+  turbosmurfsHaven: { name: 'TurboSmurfs, Best agents on Haven in 2026: ranked and pro picks', url: 'https://turbosmurfs.gg/article/best-valorant-agents-on-haven-map', date: '2026-09-29' },
+  lfcarryMaps: { name: 'LFCarry, VALORANT maps and the Act 6 pool (patch 13.10)', url: 'https://lfcarry.com/guides/valorant-maps', date: '2026-11-17' },
 } as const satisfies Record<string, Source>;
 type SourceId = keyof typeof SOURCES;
 
@@ -129,12 +131,12 @@ const vsMiddle = (id: string, ranks: readonly RankId[], above: boolean | 'not' =
   }
   return true;
 };
-/** Every check holds, or the first that doesn't says so. */
 /** The agent is a sound pick on a map at each rank given: B or better there. */
 const goodOn = (map: string, id: string, ranks: readonly RankId[]) => (): true | string => {
   for (const r of ranks) { const a = agentAt(map, r, id); if (TIER_ORDER.indexOf(a.tier) > TIER_ORDER.indexOf('B')) return `${id} on ${map} at ${r}: ${a.tier} (${Math.round(a.fit)})`; }
   return true;
 };
+/** Every check holds, or the first that doesn't says so. */
 const all = (...checks: (() => true | string)[]) => (): true | string => { for (const c of checks) { const x = c(); if (x !== true) return x; } return true; };
 /** Where the agent places among all agents (1 the best) on 'any' map at a rank. */
 const placeAt = (rank: RankId, id: string, party: PartySize = 5) => ask('any', rank, party).agents.findIndex((a) => a.id === id) + 1;
@@ -235,7 +237,7 @@ export const CLAIMS: readonly Claim[] = [
   { id: 'haven-neon', text: 'Neon’s speed suits Haven’s three sites and fast rotations.', sources: ['hotspawnMaps', 'thespikeMaps'], check: inBest('haven', 'neon', TOP) },
   { id: 'haven-fade', text: 'Fade’s Haunt and Prowlers clear Haven’s tight site corners.', sources: ['hotspawnMaps', 'mobalytics', 'dodgeHaven'], check: inBest('haven', 'fade', ['iron', 'bronze', 'silver', 'gold']) },
   { id: 'haven-breach', text: 'Breach’s Fault Line covers the width of Haven’s lanes.', sources: ['thespikeMaps', 'mobalytics', 'dodgeHaven'], note: 'Sources disagree with this year’s play: pros didn’t pick Breach on Haven at the 2026 events, and his ranked win rate is the second lowest of any agent, so the engine rates him C or D there.' },
-  { id: 'haven-killjoy', text: 'Killjoy’s turret stops Haven’s flanks while her Alarmbots watch for lurkers.', sources: ['hotspawnMaps', 'dodgeHaven'], check: inBest('haven', 'killjoy', ['iron', 'bronze', 'silver', 'gold', 'platinum', 'diamond']) },
+  { id: 'haven-killjoy', text: 'Killjoy’s turret stops Haven’s flanks while her Alarmbots watch for lurkers.', sources: ['hotspawnMaps', 'dodgeHaven', 'turbosmurfsHaven', 'lfcarryMaps'], check: both(inBest('haven', 'killjoy', ['iron', 'bronze', 'silver', 'gold', 'platinum']), inTop('haven', 'killjoy', ['diamond'])), note: 'The guides give Killjoy for Haven’s defense and Cypher for its attack (TurboSmurfs, September 2026). At Diamond, over both sides, the comps with Cypher and with Killjoy come within a hundredth of a point of each other, and Killjoy leads the defense, so there she has to be in one of the three best comps.' },
   { id: 'breeze-jett', text: 'Jett holds Breeze’s long sightlines with the Operator and makes space on attack with her dash and smokes.', sources: ['thespikeMaps', 'mobalytics', 'wecoach', 'dodgeBreeze'], check: inTop('breeze', 'jett', ALL) },
   { id: 'breeze-kayo', text: 'KAY/O’s knife counters the Sova and Viper utility Breeze teams lean on.', sources: ['thespikeMaps', 'mobalytics', 'dodgeBreeze'], check: goodOn('breeze', 'kayo', [...RANKED, ...TOP]) },
   { id: 'breeze-cypher', text: 'Cypher’s Trapwires lock Breeze’s chokes, such as Elbow, and cover a flank.', sources: ['wecoach', 'thespikeMaps', 'dodgeBreeze'], check: goodOn('breeze', 'cypher', RANKED) },
@@ -265,7 +267,7 @@ export const CLAIMS: readonly Claim[] = [
   { id: 'abyss-omen', text: 'Omen is the controller guides give Abyss: his teleport reaches its high spots and his smokes block mid.', sources: ['thespikeAbyss', 'dodgeAbyss'], check: inBest('abyss', 'omen', RANKED) },
   { id: 'abyss-vyse', text: 'Vyse’s walls block Abyss’s few ways in.', sources: ['thespikeAbyss', 'dodgeAbyss'], check: inTop('abyss', 'vyse', RANKED) },
   { id: 'summit-sage', text: 'Summit suits Sage: her wall blocks its chokes, and pros played her there in 2026.', sources: ['esportnowSummit', 'vlrStage2'], check: inBest('summit', 'sage', ALL) },
-  { id: 'summit-vyse', text: 'Vyse’s wall and flash work well together on Summit, and her ult reaches far for a retake.', sources: ['wecoach', 'esportnowSummit'], check: goodOn('summit', 'vyse', RANKED) },
+  { id: 'summit-vyse', text: 'Vyse’s wall and flash work well together on Summit, and her ult reaches far for a retake.', sources: ['wecoach', 'esportnowSummit'], note: 'Sources disagree with this year’s play: pros picked Vyse on 6% of Summit lineups at Champions 2026, with Chamber and Sage the sentinels on most, and this patch’s map guides don’t name her there (LFCarry, 17 November 2026), so the engine rates her B to C there, behind Chamber, Sage, Cypher and Killjoy.' },
   { id: 'summit-skye', text: 'Skye’s extra flashes clear Summit’s spots again and again at little risk.', sources: ['wecoach', 'esportnowSummit'], note: 'Sources disagree with this year’s play: pros hardly picked Skye on Summit in 2026 (3% of maps), with Fade the initiator on most, so the engine rates her C or D there.' },
   { id: 'summit-raze', text: 'Raze’s Blast Packs move her across Summit’s height, and her ult is easier to land on its open sites.', sources: ['wecoach', 'esportnowSummit'], check: inTop('summit', 'raze', ['silver', 'gold', 'platinum', 'diamond']) },
   { id: 'corrode-sova', text: 'Sova’s recon finds Corrode’s defenders on their high spots.', sources: ['dodgeCorrode', 'hotspawnComps'], check: inTop('corrode', 'sova', TOP, 10) },
@@ -302,7 +304,7 @@ export const CLAIMS: readonly Claim[] = [
   { id: 'solo-low-controllers', text: 'Playing alone at the low ranks, Clove and Omen are the controllers to climb with: Clove smokes even after dying, and Omen can lurk on his own.', sources: ['prosettingsSolo', 'sequel26', 'strafe26'], check: () => { for (const r of LOW) { const c = ask('any', r, 1).agents.filter((a) => agentById(a.id)!.role === 'controller').slice(0, 2).map((a) => a.id).sort(); if (c.join() !== 'clove,omen') return `${r}: ${c.join(' and ')} lead the controllers`; } return true; } },
   { id: 'sova-rises', text: 'Sova gets better the higher you climb: his Recon Bolt lineups pay off for players who know them.', sources: ['sequel26', 'boostingSolo', 'prosettingsSolo'], check: () => { for (const p of [1, 5] as const) if (placeAt('radiant', 'sova', p) >= placeAt('iron', 'sova', p)) return `party of ${p}: Sova #${placeAt('iron', 'sova', p)} at Iron, #${placeAt('radiant', 'sova', p)} at Radiant`; return true; } },
   { id: 'solo-top-picks', text: 'Playing alone at Immortal and Radiant, Jett, Clove, Sova and Fade are among the best picks.', sources: ['switchblade26', 'boostingSolo', 'sequel26', 'esportstalesRanks'], check: all(...['jett', 'clove', 'sova', 'fade'].map((id) => tierAt(id, TOP, 'A', true, 1))) },
-  { id: 'solo-top-rare', text: 'Players at Radiant hardly ever pick Astra, Harbor or Breach in ranked: their kits pay off only with a team that talks.', sources: ['esportstalesRanks', 'boostingSolo', 'prosettingsSolo'], check: all(...['astra', 'harbor', 'breach'].map((id) => vsMiddle(id, ['radiant'], false, 1))) },
+  { id: 'solo-top-rare', text: 'Players at Radiant hardly ever pick Astra, Harbor or Breach in ranked: their kits pay off only with a team that talks.', sources: ['esportstalesRanks', 'boostingSolo', 'prosettingsSolo'], check: all(...['astra', 'harbor', 'breach'].map((id) => vsMiddle(id, ['radiant'], 'not', 1))), note: 'op.gg’s Radiant table for patch 13.10 (read 20 November 2026) has Astra on 0.5% of picks, 21st of 30, where the August list left her out. Counted at her real share she is the middle agent for a solo player there, so the check asks that none of the three fits better than the middle.' },
   { id: 'teamplay-climbs', text: 'From Platinum and Diamond up, coordinated utility, trading and team play decide rounds.', sources: ['prosettings', 'gosu'], note: 'Checked by the plays-by-rank tests (tests/unit/playrank.test.ts) and in the review.' },
   // ------------------------------------------------ rank by rank (0.5.5)
   { id: 'sage-iron', text: 'Sage is one of the best picks at Iron and Bronze: the safest sentinel there, and the most played agent at Iron.', sources: ['swiftboost26', 'strafe26', 'dignitasBeginners', 'esportstalesRanks'], check: all(tierAt('sage', ['iron', 'bronze'], 'S'), tierAt('sage', ['iron', 'bronze'], 'S', true, 1)) },

@@ -13,8 +13,10 @@ import { plantSpots } from '../../src/core/kb/features.ts';
 import { PLAY_RANK } from '../../src/core/engine/weights.ts';
 import { RANK_IDS, rankOf, type RankId } from '../../src/core/kb/ranks.ts';
 import { agentTips, tipsFor, ultTip } from '../../src/core/engine/tips.ts';
-import { CHAT_TIPS, chatText, summaryText } from '../../src/core/engine/summary.ts';
+import { CHAT_TIPS, chatText, fitShown, fitValue, summaryText } from '../../src/core/engine/summary.ts';
+import { tierOf } from '../../src/core/engine/weights.ts';
 import { explainTeam } from '../../src/core/engine/explain.ts';
+import { asPlay, sanitizeMyPlay } from '../../src/core/saved.ts';
 import { modelFor, type Situation } from '../../src/core/engine/model.ts';
 
 // a whole sentence, with no clause joined on by a colon or a semicolon
@@ -500,6 +502,45 @@ describe('copying a plan', () => {
     ok(text.includes('Comp: Sova, Clove, Jett, Reyna, Chamber (your party plays Sova and Clove). Fit 100 among duos, tier S.\nThe best picks for your random teammates are Jett, Reyna and Chamber.\nIf they pick on their own, expect a team that fits about 77 out of 100.\nAsk your random teammates for a sentinel first.'), text);
     ok(summaryText({ ...parts, party: [] }).includes('. Fit 100, tier S.'), 'a five-stack’s fit is just its fit');
     ok(!summaryText(parts).includes('teammates for a sentinel first'), 'nothing to ask, no line');
+  });
+  spec('with fit numbers off in Settings, a copied plan names tiers only, as the comp rows and Print do', () => {
+    const team = ['sova', 'clove', 'jett', 'reyna', 'chamber'];
+    const s = { map: 'haven', side: 'attack', sites: [], rank: 'gold' } as const;
+    const parts = { title: 'Haven, attack · Gold · duo', team, party: ['sova', 'clove'], fit: 100, tier: 'S', ask: 'sentinel', expected: 77.4, numbers: false, why: explainTeam(modelFor(s), team), tips: tipsFor(team, s, 2, ['sova', 'clove']) };
+    const tier = tierOf(77.4);
+    for (const text of [summaryText(parts), chatText(parts)]) {
+      ok(text.includes(`If they pick on their own, expect a tier ${tier} team.`), text);
+      ok(!/\bfits?\b[^.]*\d|out of 100/i.test(text), text);
+    }
+    ok(summaryText(parts).includes('Comp: Sova, Clove, Jett, Reyna, Chamber (your party plays Sova and Clove). Tier S.\n'), summaryText(parts));
+    eq(fitShown(parts), 'Tier S');
+    eq(fitShown({ ...parts, numbers: true }), 'Fit 100 among duos');
+    eq([fitValue(87.4, true), fitValue(87.4, false)], ['87', `tier ${tierOf(87.4)}`]);
+  });
+  spec('a saved party plan copies with the party’s agents marked, and its fit is the whole team’s', () => {
+    // a saved plan keeps its party, but not where it ranked among parties (`expected` is the Planner's alone)
+    const team = ['sova', 'clove', 'jett', 'reyna', 'chamber'];
+    const s = { map: 'haven', side: 'attack', sites: [], rank: 'gold', party: 2 } as const;
+    const text = summaryText({ title: 'Haven, attack · Gold · duo', team, party: ['sova', 'clove'], fit: 96.2, tier: 'S', why: explainTeam(modelFor(s), team, { party: ['sova', 'clove'] }), tips: tipsFor(team, s, 2, ['sova', 'clove']) });
+    ok(text.includes('Comp: Sova, Clove, Jett, Reyna, Chamber (your party plays Sova and Clove). Fit 96, tier S.\nThe best picks for your random teammates are Jett, Reyna and Chamber.'), text);
+  });
+  spec('a party with one random teammate left names that teammate’s pick, and what to ask them for, in the singular', () => {
+    // a solo player with three teammates locked in has one random teammate to pick
+    const team = ['jett', 'phoenix', 'sova', 'omen', 'sage'];
+    const s = { map: 'bind', side: 'attack', sites: [], rank: 'gold', party: 1 } as const;
+    const parts = { title: 'Bind, attack · Gold · solo', team, party: ['sage'], locked: ['jett', 'omen', 'sova'], fit: 100, tier: 'S', ask: 'duelist', expected: 87, why: explainTeam(modelFor(s), team, { party: ['sage'] }), tips: tipsFor(team, s, 1, ['sage'], 3) };
+    for (const text of [summaryText(parts), chatText(parts)]) {
+      ok(text.includes('The best pick for your random teammate is Phoenix.\nIf they pick on their own, expect a team that fits about 87 out of 100.\nAsk your random teammate for a duelist first.'), text);
+      ok(!text.includes('random teammates'), text);
+    }
+  });
+  spec('a play you drew with nothing said of what it’s for copies straight on to its steps, with no empty line', () => {
+    const team = ['omen', 'sova', 'jett', 'killjoy', 'breach'];
+    const s = { map: 'bind', side: 'attack', sites: [], rank: 'gold' } as const;
+    const mine = sanitizeMyPlay({ id: 'm_copytest', map: 'bind', side: 'attack', site: 'A', kind: 'hit', name: 'Quick A smoke', about: '', steps: [{ jobs: ['smoke'], route: ['A Bath', 'A Short'], text: 'Smoke A Short.' }] })!;
+    const f = fillPlay(asPlay(mine), team, 'gold');
+    const text = summaryText({ title: 'Bind, attack · Gold · five-stack', team, fit: 90, tier: 'A', why: explainTeam(modelFor(s), team), plays: [f], tips: [] });
+    ok(/\nPlay: Quick A smoke \(.+\)\n1\. Omen /.test(text), text);
   });
   spec('the short version for a party chat has the comp with roles, how it wins, who does what in the play and two tips', () => {
     const team = ['omen', 'sova', 'jett', 'killjoy', 'breach'];

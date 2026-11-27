@@ -10,22 +10,33 @@ import { Icon, ICONS, type IconName } from '../icons.tsx';
 import { AbilityIcon, AgentIcon, MapThumb, RoleIcon } from '../art.tsx';
 import { Fit, TeamIcons } from '../planner/comp.tsx';
 import { toast } from '../state.ts';
-import { measure, play, SOUND_SETS, SOUNDS, type SoundName, type SoundSet } from '../sound.ts';
+import { measure, play, SOUND_SETS, SOUNDS, takesOf, type SoundName, type SoundSet } from '../sound.ts';
 import { ROLE_IDS } from '../../core/kb/roles.ts';
 import { TIERS } from '../../core/engine/weights.ts';
 import type { PageProps } from './index.ts';
 
-type Levels = Record<string, Record<SoundSet, { peak: number; loud: number }>>;
+type Level = { peak: number; loud: number; length: number };
+type Levels = Record<string, Record<SoundSet, Level & { quiet: number; takes: Level[] }>>;
 const dB = (x: number) => (x > 0 ? Math.round(20 * Math.log10(x)) : -99);
 
-/** Every sound in every set, measured without playing it, so a cue much louder or quieter than the rest stands out. */
+/**
+ * Every sound in every set, measured without playing it, so a cue much louder or quieter than the
+ * rest stands out. A cue with several takes shows its loudest, longest and quietest.
+ */
 function SoundLevels() {
   const [levels, setLevels] = useState<Levels | null>(null);
   const check = async () => {
     const out: Levels = {};
     for (const name of Object.keys(SOUNDS) as SoundName[]) {
       out[name] = {} as Levels[string];
-      for (const set of SOUND_SETS) out[name]![set] = await measure(name, set);
+      for (const set of SOUND_SETS) {
+        const takes: Level[] = [];
+        for (let v = 0; v < takesOf(name, set); v++) takes.push(await measure(name, set, v));
+        out[name]![set] = {
+          peak: Math.max(...takes.map((t) => t.peak)), loud: Math.max(...takes.map((t) => t.loud)),
+          quiet: Math.min(...takes.map((t) => t.loud)), length: Math.max(...takes.map((t) => t.length)), takes,
+        };
+      }
     }
     setLevels(out);
   };
@@ -33,12 +44,15 @@ function SoundLevels() {
     <>
       <div class="row"><Button size="sm" onClick={() => void check()}>Check sound levels</Button></div>
       {levels && (
-        <table class="key-table sound-levels" data-levels={JSON.stringify(levels)}>
-          <thead><tr><th>Sound</th><th>Kind</th>{SOUND_SETS.map((x) => <th key={x}>{x} (loudest, peak dB)</th>)}</tr></thead>
-          <tbody>{Object.entries(levels).map(([name, by]) => (
-            <tr key={name}><td>{name}</td><td>{SOUNDS[name as SoundName]}</td>{SOUND_SETS.map((x) => <td key={x}>{dB(by[x].loud)} / {dB(by[x].peak)}</td>)}</tr>
-          ))}</tbody>
-        </table>
+        <>
+          <p class="muted">Each set shows the loudest 50 ms and the peak, in dB at full volume, and how long the sound lasts.</p>
+          <table class="key-table sound-levels" data-levels={JSON.stringify(levels)}>
+            <thead><tr><th>Sound</th><th>Kind</th>{SOUND_SETS.map((x) => <th key={x}>{x}</th>)}</tr></thead>
+            <tbody>{Object.entries(levels).map(([name, by]) => (
+              <tr key={name}><td>{name}</td><td>{SOUNDS[name as SoundName]}</td>{SOUND_SETS.map((x) => <td key={x}>{dB(by[x].loud)} / {dB(by[x].peak)}, {by[x].length} ms</td>)}</tr>
+            ))}</tbody>
+          </table>
+        </>
       )}
     </>
   );

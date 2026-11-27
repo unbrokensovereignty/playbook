@@ -2,7 +2,7 @@
  * The plays a comp can run, filled with its agents: a list to choose from (best fit first) and the
  * chosen play's steps beside its routes on the minimap. Pointing at a step (or focusing it) brings its route forward.
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useId, useMemo, useRef, useState } from 'preact/hooks';
 import { agentById } from '../../core/kb/agents.ts';
 import { mapById, MAPS, POOL, spotName, type Side, type SiteId } from '../../core/kb/maps.ts';
 import { KIND_NAMES, MOMENTS, momentName, playTitle, roundOf, type Play } from '../../core/kb/plays.ts';
@@ -16,6 +16,7 @@ import { Icon } from '../icons.tsx';
 import { drawLink, useMyPlays } from '../myplays.ts';
 import { play } from '../sound.ts';
 import { go } from '../state.ts';
+import { scrollMotion } from '../theme.ts';
 
 const fitTone = (fit: number) => ({ 'Fits well': 'good', Works: undefined, 'A stretch': 'warn' } as const)[playFitLabel(fit)];
 
@@ -36,9 +37,11 @@ export function PlaysPanel({ team, map: mapId, side: sidePick, sites, rank, onPi
   useEffect(() => setPick(0), [team.join(), map.id, side, rank]);
   const chosen = list[Math.min(pick, list.length - 1)];
   useEffect(() => { if (chosen) onPick?.(chosen); }, [chosen?.play.id]);
-  const rows = (fs: readonly FilledPlay[], from: number) => <PlayRows plays={fs} chosen={chosen} onPick={(i) => setPick(from + i)} />;
+  const root = useRef<HTMLDivElement>(null);
+  const at = chosen ? list.indexOf(chosen) : 0;
+  const rows = (fs: readonly FilledPlay[], from: number) => <PlayRows plays={fs} chosen={chosen} onPick={(i, key) => { setPick(from + i); cardIntoView(root.current, key); }} />;
   return (
-    <div class="plays">
+    <div class="plays" ref={root}>
       {(!mapById(mapId) || sidePick === 'both') && (
         <div class="row wrap plays-tools">
           {!mapById(mapId) && <Select label="Map for the plays" value={own} onChange={setOwn} options={[...POOL, ...MAPS.filter((m) => !m.pool)].map((m) => [m.id, m.pool ? m.name : `${m.name} (out of the pool)`] as const)} />}
@@ -55,7 +58,7 @@ export function PlaysPanel({ team, map: mapId, side: sidePick, sites, rank, onPi
         <span>Know a play that isn’t here? Draw it on the map, and it’s filled with any comp like these.</span>
         <Button size="sm" kind="quiet" icon="draw" onClick={() => go('maps', drawLink(map.id))}>Draw a play</Button>
       </p>
-      {chosen && <PlayCard f={chosen} rank={rank} key={chosen.play.id} />}
+      {chosen && <PlayCard f={chosen} rank={rank} key={chosen.play.id} nav={{ at, of: list.length, go: (i, from) => { setPick(i); refocus(root.current, from); } }} />}
     </div>
   );
 }
@@ -64,11 +67,11 @@ export function PlaysPanel({ team, map: mapId, side: sidePick, sites, rank, onPi
  * Plays to choose from, as options of a list box: what each is (`label`, its kind and site unless
  * given), its name, whether it's one you drew, and how well the comp fits it.
  */
-export function PlayRows({ plays, chosen, onPick, label }: { plays: readonly FilledPlay[]; chosen: FilledPlay | undefined; onPick: (i: number) => void; label?: (p: Play) => string }) {
+export function PlayRows({ plays, chosen, onPick, label }: { plays: readonly FilledPlay[]; chosen: FilledPlay | undefined; onPick: (i: number, key: boolean) => void; label?: (p: Play) => string }) {
   return (
     <>
       {plays.map((f, i) => (
-        <button type="button" role="option" key={f.play.id} aria-selected={f.play.id === chosen?.play.id} class="play-row" onClick={() => { play('tick'); onPick(i); }}>
+        <button type="button" role="option" key={f.play.id} aria-selected={f.play.id === chosen?.play.id} class="play-row" onClick={(e) => { play('tick'); onPick(i, e.detail === 0); }}>
           <span class="play-kind">{label ? label(f.play) : `${KIND_NAMES[f.play.kind]}${f.play.site ? ` ${f.play.site}` : ''}`}</span>
           <span class="play-name">{f.play.name}</span>
           {f.play.mine && <Badge tone="accent">Yours</Badge>}
@@ -87,18 +90,38 @@ export function PlayRows({ plays, chosen, onPick, label }: { plays: readonly Fil
  * until you move on; and the replay runs the play one moment at a time, the players walking their
  * routes and their utility landing as they arrive.
  */
-export function PlayCard({ f: listed, rank }: { f: FilledPlay; rank?: RankId }) {
+export function PlayCard({ f: listed, rank, nav }: { f: FilledPlay; rank?: RankId; nav?: PlayNav }) {
   // a play that reads and reacts shows one branch at a time, the best one first
   const [branch, setBranch] = useState(listed.play.id);
   const f = listed.branches?.find((b) => b.play.id === branch) ?? listed;
-  return <BranchCard key={f.play.id} f={f} rank={rank} branches={listed.branches} onBranch={setBranch} />;
+  return <BranchCard key={f.play.id} f={f} rank={rank} branches={listed.branches} onBranch={setBranch} nav={nav} />;
 }
 
-function BranchCard({ f, rank, branches, onBranch }: { f: FilledPlay; rank?: RankId; branches?: readonly FilledPlay[]; onBranch: (id: string) => void }) {
+/** The card is drawn afresh for each play: after stepping to the next one, focus goes back to the button that was pressed. */
+export function refocus(root: HTMLElement | null, from: string) {
+  requestAnimationFrame(() => {
+    const b = root?.querySelector<HTMLButtonElement>(`.play-step-plays button[aria-label="${from}"]`);
+    (b && !b.disabled ? b : root?.querySelector<HTMLElement>('.play-card h3'))?.focus({ preventScroll: true });
+    // while the card is stuck in view beside the list, the list follows it, so the play on show stays lit
+    // where you can see it. Scrolling then can't move the card, or the button under the pointer
+    const card = root?.querySelector<HTMLElement>('.play-card');
+    if (!card || getComputedStyle(card).position !== 'sticky' || card.getBoundingClientRect().top > parseFloat(getComputedStyle(card).top) + 1) return;
+    root?.querySelector<HTMLElement>('.play-row[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', behavior: scrollMotion() });
+  });
+}
+
+/** Where the play on show sits in its list, so the card can step to the next one without the list. */
+export type PlayNav = { at: number; of: number; go: (i: number, from: string) => void };
+
+function BranchCard({ f, rank, branches, onBranch, nav }: { f: FilledPlay; rank?: RankId; branches?: readonly FilledPlay[]; onBranch: (id: string) => void; nav?: PlayNav }) {
   const [hover, setFocus] = useState(-1);
   const [step, setStep] = useState(-1);
   const [replay, setReplay] = useState<Replay | undefined>(undefined);
   const [playing, setPlaying] = useState(false);
+  // paused part way through a moment's walk: Go on carries on from there
+  const [paused, setPaused] = useState(false);
+  // the moment on show has been walked to its end
+  const [walked, setWalked] = useState(false);
   const focus = hover >= 0 ? hover : step;
   const last = f.steps.length - 1;
   const map = mapById(f.play.map)!;
@@ -109,29 +132,46 @@ function BranchCard({ f, rank, branches, onBranch }: { f: FilledPlay; rank?: Ran
   const kinds = THROW_KINDS.filter((k) => f.steps.some((s) => s.throws.some((t) => t.kind === k)));
   // the Spike, from the moment it's down
   const spike = f.plant && { at: f.plant.at, about: f.plant.about, when: moments.indexOf(f.plant.when), end: f.plant.end };
-  // a replay moves on by itself, a moment at a time, and stops at the last
+  // a replay moves on by itself, a moment at a time, a short pause after each lands, and stops at the last
   useEffect(() => {
-    if (!playing || !replay) return;
+    if (!playing || !replay || !walked) return;
     const t = setTimeout(() => {
       if (replay.at >= moments.length - 1) setPlaying(false);
-      else setReplay({ at: replay.at + 1, run: replay.run + 1 });
-    }, REPLAY_MS + REPLAY_PAUSE);
+      else show(replay.at + 1);
+    }, document.documentElement.dataset['motion'] === 'full' ? REPLAY_PAUSE : REPLAY_MS + REPLAY_PAUSE); // with no walk to watch, each moment still gets as long
     return () => clearTimeout(t);
-  }, [playing, replay?.run]);
-  const show = (at: number) => { setReplay({ at, run: (replay?.run ?? 0) + 1 }); setStep(-1); };
-  const done = !!replay && !playing && replay.at >= moments.length - 1;
+  }, [playing, walked, replay?.run]);
+  const show = (at: number) => { setReplay({ at, run: (replay?.run ?? 0) + 1 }); setWalked(false); setPaused(false); setStep(-1); };
+  const done = !!replay && !playing && walked && replay.at >= moments.length - 1;
   const toggle = () => {
-    if (playing) { play('tick'); setPlaying(false); return; }
+    if (playing) { play('tick'); setPlaying(false); if (!walked) setPaused(true); return; }
     play('open');
+    // paused part way through a moment: carry on walking it
+    if (replay && paused && !walked) { setPaused(false); setPlaying(true); return; }
     show(!replay || done ? 0 : replay.at + 1 > moments.length - 1 ? 0 : replay.at + 1);
     setPlaying(true);
   };
-  const reset = () => { setStep(-1); setReplay(undefined); setPlaying(false); };
+  const reset = () => { setStep(-1); setReplay(undefined); setPlaying(false); setPaused(false); };
   const stateOf = (i: number) => (!replay ? '' : momentOf(i) === replay.at ? ' now' : momentOf(i) > replay.at ? ' later' : '');
+  // the stepper's buttons keep their names as the card redraws, so each also reads the play now shown and where it is
+  const uid = useId();
   return (
     <article class="play-card" aria-label={playTitle(f.play)}>
+      <div class="row-between play-title">
+        <h3 tabIndex={-1} id={`${uid}-name`}>{playTitle(f.play)}</h3>
+        <div class="row play-title-tools">
+          {f.play.mine && <Button size="sm" kind="quiet" icon="draw" onClick={() => go('maps', drawLink(map.id, f.play.id))}>Change</Button>}
+          {nav && nav.of > 1 && (
+            <div class="row play-step-plays" role="group" aria-label="Other plays">
+              <IconButton icon="chevron-left" label="Previous play" size="sm" describedBy={`${uid}-name ${uid}-at`} disabled={nav.at === 0} onClick={() => nav.go(nav.at - 1, 'Previous play')} />
+              <span class="small muted play-step-at" id={`${uid}-at`}>{nav.at + 1} of {nav.of}</span>
+              <IconButton icon="chevron-right" label="Next play" size="sm" describedBy={`${uid}-name ${uid}-at`} disabled={nav.at === nav.of - 1} onClick={() => nav.go(nav.at + 1, 'Next play')} />
+            </div>
+          )}
+        </div>
+      </div>
       <div class="play-map stack">
-        <Minimap map={map.id} zoomable replay={replay} spike={spike} routes={f.steps.map((s, i) => ({ route: s.route, who: s.who.map((d) => d.id), throws: s.throws, when: momentOf(i) }))} focus={focus} onFocus={setFocus} label={`${f.play.name} on the ${map.name} minimap`} />
+        <Minimap map={map.id} zoomable replay={replay && { ...replay, paused }} onWalked={() => setWalked(true)} spike={spike} routes={f.steps.map((s, i) => ({ route: s.route, who: s.who.map((d) => d.id), throws: s.throws, when: momentOf(i) }))} focus={focus} onFocus={setFocus} label={`${f.play.name} on the ${map.name} minimap`} />
         {(kinds.length > 0 || spike) && (
           <ul class="plain-list row wrap map-legend play-legend" aria-label="What the marks mean">
             {kinds.map((k) => <li key={k} class="row"><ThrowSwatch kind={k} /><span class="small">{THROW_NAMES[k]}</span></li>)}
@@ -140,10 +180,6 @@ function BranchCard({ f, rank, branches, onBranch }: { f: FilledPlay; rank?: Ran
         )}
       </div>
       <div class="play-body">
-        <div class="row-between play-title">
-          <h3>{playTitle(f.play)}</h3>
-          {f.play.mine && <Button size="sm" kind="quiet" icon="draw" onClick={() => go('maps', drawLink(map.id, f.play.id))}>Change</Button>}
-        </div>
         {f.play.about ? <p class="muted">{f.play.about}</p> : f.play.mine && <p class="muted">A play you drew.</p>}
         <p class="small muted play-demand">{demandLine(f, rank)}</p>
         {f.plant && <p class="small muted play-plant">{plantLine(f.play, f.plant)}</p>}
@@ -205,3 +241,14 @@ function BranchCard({ f, rank, branches, onBranch }: { f: FilledPlay; rank?: Ran
 
 /** The pause between a replay's moments (ms), so each can be taken in before the next. */
 const REPLAY_PAUSE = 900;
+
+/** After a pick, brings the play's map into view when it's drawn below the window (the list and map are one column). */
+export function cardIntoView(root: HTMLElement | null, key = false) {
+  requestAnimationFrame(() => {
+    const card = root?.querySelector<HTMLElement>('.play-card');
+    if (!card || card.getBoundingClientRect().top <= innerHeight - 120) return;
+    card.scrollIntoView({ block: 'start', behavior: scrollMotion() });
+    // a pick made from the keyboard follows the card, so focus isn't left on a row that's now off screen
+    if (key) card.querySelector<HTMLElement>('h3')?.focus({ preventScroll: true });
+  });
+}

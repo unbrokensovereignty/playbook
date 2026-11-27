@@ -1,7 +1,7 @@
 /**
  * Setting up: your rank, how you queue and the agents you play, which the Planner and Rankings
- * start from (Settings → You). The app asks as it opens for the first time; someone who used it
- * before this was asked gets a card on Home instead. Either way it's asked once, and each answer
+ * start from (Settings → You). The app asks as it opens for the first time; someone whose saved data
+ * has no answers yet (a restored backup, say) gets a card on Home instead. Either way it's asked once, and each answer
  * can be changed later in Settings.
  */
 import { useState } from 'preact/hooks';
@@ -14,6 +14,7 @@ import { data, dialogs, openDialog, safely, tabRole, watch } from './state.ts';
 import { play } from './sound.ts';
 import { question } from './planner/store.ts';
 import { SETTINGS } from '../core/settings.ts';
+import { leave } from './leave.ts';
 
 /** The setup hasn't been done or put off yet, and this tab is the one that saves. */
 export const setupDue = (): boolean => tabRole.value !== 'reader' && !data().app().welcomed;
@@ -69,11 +70,11 @@ const WELCOME = 'Welcome to Playbook';
 
 /** Asks how you play. Whatever the answer, or none, it isn't asked again (Settings → You has it all). */
 export async function openSetup(title = WELCOME): Promise<void> {
-  await openDialog<boolean>(title, (close) => <Setup title={title} close={close} />);
+  await openDialog<boolean>(title, (close) => <Setup title={title} close={close} />, { holds: true });
   welcomed();
 }
 
-/** On Home, for someone who used the app before it asked: the offer to set it up. */
+/** On Home, when the saved data has no setup answers yet: the offer to set it up. */
 export function SetupOffer() {
   watch('meta');
   if (!setupDue() || dialogs.value.some((d) => d.label === WELCOME)) return null;
@@ -85,7 +86,11 @@ export function SetupOffer() {
         <p class="small muted">The Planner and Rankings start from your rank, how you queue and the agents you play.</p>
       </div>
       <div class="row">
-        <Button size="sm" kind="quiet" onClick={welcomed}>Not now</Button>
+        <Button size="sm" kind="quiet" onClick={(e) => {
+          // the tour's offer takes this card's place: swap them at once, with nothing closing first
+          if (!data().app().tips.includes('tour-offer')) welcomed();
+          else leave((e.currentTarget as Element).closest('.tour-offer'), welcomed);
+        }}>Not now</Button>
         <Button size="sm" kind="primary" onClick={() => void openSetup('Tell Playbook how you play')}>Set up</Button>
       </div>
     </aside>

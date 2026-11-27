@@ -6,7 +6,7 @@ import { defineConfig, type Project } from '@playwright/test';
  * (dark), instead, and `all` runs everything (those browsers need `npx playwright install firefox webkit`).
  */
 const which = process.env['E2E_BROWSERS'] ?? 'chromium';
-// a Chromium that came some other way (a container may have one already): PW_CHROMIUM=/path/to/chrome
+// a Chromium installed some other way: PW_CHROMIUM=/path/to/chrome
 const own = process.env['PW_CHROMIUM'] ? { launchOptions: { executablePath: process.env['PW_CHROMIUM'] } } : {};
 const chromium: Project[] = [
   { name: 'light', use: { colorScheme: 'light', ...own } },

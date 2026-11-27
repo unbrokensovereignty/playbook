@@ -7,7 +7,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { modelFor, viaIn, type Situation } from '../../src/core/engine/model.ts';
-import { belowParts, explainTeam, PHASES, STRONG, type ExplainFor } from '../../src/core/engine/explain.ts';
+import { belowParts, explainTeam, PHASES, strongForms, type ExplainFor } from '../../src/core/engine/explain.ts';
+import { sourcesIn, sourcesPart } from './lines.ts';
 import { fillPlay } from '../../src/core/engine/plays.ts';
 import { tipsFor } from '../../src/core/engine/tips.ts';
 import { AGENTS, agentById, type Agent } from '../../src/core/kb/agents.ts';
@@ -94,7 +95,7 @@ test('reasons, plans, swaps and threats name only abilities that do what they sa
       };
       for (const line of e.pros) {
         for (const d of DIMS) {
-          const verb = [STRONG[d].one, STRONG[d].many].find((v) => new RegExp(` ${v}[,.]`).test(line));
+          const verb = strongForms(d).find((v) => new RegExp(` ${v}[,.]`).test(line));
           if (verb) check(line.split(` ${verb}`)[0]!, d);
         }
         const yours = /^Your (.+?) brings (.+?) with (.+)\.$/.exec(line);
@@ -104,9 +105,7 @@ test('reasons, plans, swaps and threats name only abilities that do what they sa
         }
       }
       for (const line of e.cons) for (const d of DIMS) {
-        const info = DIM_INFO[d];
-        const only = line.startsWith(`${info.has.charAt(0).toUpperCase()}${info.has.slice(1)} ${info.few ? 'come' : 'comes'} only from `) || new RegExp(` bring only a (?:little|few) ${info.has}\\b`).test(line);
-        if (only) check(line.split(/, so |\. [A-Z]/)[0]!, d, (f) => does(f) || f === 'self');
+        if (sourcesIn(line, d)) check(sourcesPart(line), d, (f) => does(f) || f === 'self');
       }
       for (const line of e.cons) {
         const smoke = /block (?:them|the long sightlines) with (.+?)[,.]/.exec(line)?.[1];
@@ -119,8 +118,8 @@ test('reasons, plans, swaps and threats name only abilities that do what they sa
         if (!p.ability) continue;
         const a = agentById(p.agent)!, f = fit(a.id, p.ability, p.dim);
         if (f === 'none') no(`plan "${e.plan}": ${a.name}’s ${p.ability} does nothing for ${p.dim}`);
-        if (f === 'escape' && !e.plan.includes(`with ${p.ability} to get away`)) no(`plan "${e.plan}": ${p.ability} is ${a.name}’s way out, not how they ${PHASES[p.phase][p.dim]}`);
-        if (f === 'self' && !e.plan.includes(`stays in the fight with ${p.ability}`)) no(`plan "${e.plan}": ${p.ability} heals only ${a.name}`);
+        if (f === 'escape' && !new RegExp(`, with ${esc(p.ability)} to get (?:out|away)\\b`).test(e.plan)) no(`plan "${e.plan}": ${p.ability} is ${a.name}’s way out, not how they ${PHASES[p.phase][p.dim]}`);
+        if (f === 'self' && !new RegExp(`\\bstays? in the fight with ${esc(p.ability)}\\b`).test(e.plan)) no(`plan "${e.plan}": ${p.ability} heals only ${a.name}`);
         if (f !== 'does' && better(a, viaIn(m, a, p.dim), p.dim, f)) no(`plan "${e.plan}": ${a.name} has better than ${p.ability} for ${p.dim}`);
       }
       // why another comp ranks lower: "Less information (Sova’s Recon Bolt)"
@@ -199,7 +198,7 @@ test('no two pros make the same point: an ability is named once, and an agent wh
         if (seen.has(x)) problems.push(`${where}: ${x} is in “${seen.get(x)}” and “${line}”`);
         else seen.set(x, line);
       }
-      const alone = e.pros.find((l) => / wins? plenty of fights alone\b/.test(l)), help = e.pros.find((l) => / works? well without much teamwork\b/.test(l));
+      const alone = e.pros.find((l) => strongForms('duel').some((v) => l.includes(` ${v}`))), help = e.pros.find((l) => / works? well without much teamwork\b/.test(l));
       for (const a of agents) if (alone && help && [alone, help].every((l) => new RegExp(`(?<![\\w/])${esc(a.name)}(?![\\w/])`).test(l))) problems.push(`${where}: “${alone}” and “${help}” both say ${a.name} needs no help`);
     });
   }
@@ -231,12 +230,12 @@ test('a con that says who brings a strength leaves nobody out: Sage’s Slow Orb
       for (const line of explainTeam(m, team).cons) for (const d of PLAIN) {
         const info = DIM_INFO[d];
         const nobody = line.startsWith(`Nobody brings ${info.lacks},`) || line.startsWith(`Nobody brings ${info.lacks}.`);
-        const only = line.startsWith(`${capital(info.has)} ${info.few ? 'come' : 'comes'} only from `) || new RegExp(` bring only a (?:little|few) ${esc(info.has)}[,.]`).test(line);
+        const only = !!sourcesIn(line, d);
         if (!nobody && !only) continue;
         // the abilities that do it, the ultimate aside (most rounds don't have it)
         for (const a of agents) for (const k of ['C', 'Q', 'E']) {
           const name = abilityOn(a.id, k)?.name;
-          if (name && fitOf(a.id, k, d) === 'does' && !namedIn(line.split(/, so |\. [A-Z]/)[0]!, a).includes(name)) problems.push(`${where}: “${line}” leaves out ${a.name}’s ${name}`);
+          if (name && fitOf(a.id, k, d) === 'does' && !namedIn(nobody ? line.split(/, so |\. [A-Z]/)[0]! : sourcesPart(line), a).includes(name)) problems.push(`${where}: “${line}” leaves out ${a.name}’s ${name}`);
         }
       }
     }
@@ -244,7 +243,7 @@ test('a con that says who brings a strength leaves nobody out: Sage’s Slow Orb
   none([...new Set(problems)]);
 });
 test('a con says nobody brings a plain strength only when no ability on the team does it, an ultimate included', () => {
-  // (grading round 6: Icebox cards said nobody brings crowd control with Killjoy's Lockdown in the comp)
+  // (graded review, pass 6: Icebox cards said nobody brings crowd control with Killjoy's Lockdown in the comp)
   const r = random(1115);
   const problems: string[] = [];
   let ult = 0;
@@ -268,24 +267,24 @@ test('a con says nobody brings a plain strength only when no ability on the team
   assert.ok(ult > 0, 'a strength only an ultimate brings is named as that');
 });
 test('a pro says an agent wins fights alone only when the gun or a basic ability does it, not an ultimate alone', () => {
-  // (grading round 6: Veto, whose fights come from his Evolution ultimate, heard that he wins plenty of fights alone)
+  // (graded review, pass 6: Veto, whose fights come from his Evolution ultimate, heard that he wins plenty of fights alone)
   const r = random(1116);
   const problems: string[] = [];
   for (const map of MAPS) for (const side of ['attack', 'defense'] as const) for (const rank of ['gold', 'immortal'] as const) {
     const m = modelFor({ map: map.id, side, rank, sites: [] });
     for (const team of [...teamsFor(map.id, r, 8), ['jett', 'sova', 'viper', 'omen', 'veto'], ['reyna', 'veto', 'fade', 'omen', 'killjoy']]) {
       for (const line of explainTeam(m, team).pros) {
-        if (!new RegExp(`${STRONG.duel.one}|${STRONG.duel.many}`).test(line)) continue;
+        const alone = new RegExp(strongForms('duel').map(esc).join('|'));
+        if (!alone.test(line)) continue;
         for (const id of team) {
           const a = agentById(id)!;
-          if (new RegExp(`\\b${a.name}\\b(?!’s)`).test(line.split(new RegExp(STRONG.duel.one + '|' + STRONG.duel.many))[0]!) && !/[^X]/.test(viaIn(m, a, 'duel'))) problems.push(`${map.name} ${side} ${rank}: “${line}” for ${a.name}`);
+          if (new RegExp(`\\b${a.name}\\b(?!’s)`).test(line.split(alone)[0]!) && !/[^X]/.test(viaIn(m, a, 'duel'))) problems.push(`${map.name} ${side} ${rank}: “${line}” for ${a.name}`);
         }
       }
     }
   }
   none([...new Set(problems)]);
 });
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 test('an agent whose basic ability does a plain strength has some of it in their numbers, so the score and the cons agree', () => {
   const problems: string[] = [];

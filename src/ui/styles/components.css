@@ -11,7 +11,7 @@
   height: 38px; padding: 0 16px;
   border: 1px solid var(--btn-line); border-radius: var(--r);
   background: var(--btn-bg); color: var(--btn-fg);
-  font-weight: 600; font-size: 0.95rem; line-height: 1; white-space: nowrap;
+  font-weight: 600; font-size: var(--fs-md); line-height: 1; white-space: nowrap;
   cursor: pointer; user-select: none;
   transition: background-color var(--dur-quick) var(--ease), border-color var(--dur-quick) var(--ease), transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick) var(--ease), color var(--dur-quick);
   box-shadow: var(--shadow-1);
@@ -24,11 +24,11 @@
 .btn .icon { flex: none; margin-left: -3px; }
 .btn .icon:last-child:not(:first-child) { margin-left: 0; margin-right: -3px; }
 .btn.primary { --btn-bg: var(--accent); --btn-fg: var(--on-accent); --btn-line: transparent; --btn-hover: color-mix(in oklab, var(--accent) 88%, var(--text)); }
-.btn.danger { --btn-bg: var(--bad); --btn-fg: var(--on-bad); --btn-line: transparent; --btn-hover: color-mix(in oklab, var(--bad) 88%, var(--text)); }
+.btn.danger { --btn-bg: var(--bad-text); --btn-fg: var(--surface); --btn-line: transparent; --btn-hover: color-mix(in oklab, var(--bad-text) 88%, var(--text)); }
 .btn.quiet { --btn-bg: transparent; --btn-line: transparent; box-shadow: none; }
 .btn.quiet:hover:not(:disabled, [aria-disabled='true']) { --btn-bg: var(--surface-2); }
 .btn.soft { --btn-bg: var(--accent-soft); --btn-fg: var(--accent-text); --btn-line: transparent; box-shadow: none; --btn-hover: color-mix(in oklab, var(--accent-soft) 90%, var(--accent)); }
-.btn.sm { height: 30px; padding: 0 11px; font-size: 0.86rem; border-radius: var(--r-sm); gap: 6px; }
+.btn.sm { height: 30px; padding: 0 11px; font-size: var(--fs-sm); border-radius: var(--r-sm); gap: 6px; }
 .btn.lg { height: 48px; padding: 0 22px; font-size: 1.05rem; border-radius: var(--r-lg); }
 .btn.block { width: 100%; }
 .btn .kbd { margin-left: 4px; }
@@ -54,10 +54,11 @@
 /* tooltips on anything with data-tip (placed by ui/tooltip.ts, above everything and always on screen) */
 .tooltip {
   position: fixed; z-index: 1000; left: 0; top: 0; max-width: min(320px, calc(100vw - 16px)); padding: 5px 9px; border-radius: var(--r-sm);
-  background: var(--text); color: var(--surface); font-size: 0.8rem; font-weight: 600; line-height: 1.3; white-space: normal; overflow-wrap: anywhere;
+  background: var(--text); color: var(--surface); font-size: var(--fs-xs); font-weight: 600; line-height: 1.3; white-space: normal; overflow-wrap: anywhere;
   pointer-events: none; opacity: 0; transition: opacity var(--dur-quick) var(--ease); box-shadow: var(--shadow-2);
 }
 .tooltip.on { opacity: 1; }
+.tooltip.instant { transition: none; }
 .tooltip[hidden] { display: none; }
 
 .kbd {
@@ -77,8 +78,10 @@
 
 .badge {
   display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--r-full);
-  background: var(--surface-2); color: var(--text2); font-size: 0.78rem; font-weight: 650; white-space: nowrap;
+  background: var(--surface-2); color: var(--text2); font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
 }
+/* on the page itself, where surface-2 is close to the background in light themes */
+.page-head .badge:not(.accent, .good, .warn, .bad) { background: var(--surface-3); }
 .badge.accent { background: var(--accent-soft); color: var(--accent-text); }
 .badge.good { background: var(--good-soft); color: var(--good-text); }
 .badge.warn { background: var(--warn-soft); color: var(--warn-text); }
@@ -87,7 +90,7 @@
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r-full);
-  border: 1px solid var(--line-strong); background: var(--surface); color: var(--text2); font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--line-strong); background: var(--surface); color: var(--text2); font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
   transition: background-color var(--dur-quick), color var(--dur-quick), border-color var(--dur-quick), transform var(--dur-quick) var(--ease);
 }
 /* only a chip you can press looks pressable */
@@ -99,13 +102,13 @@ button.chip:active { transform: scale(0.96); }
 /* ---------------------------------------------------------------- fields */
 
 .field { display: grid; gap: 6px; align-content: start; }
-.field > label, .field-label { font-weight: 650; font-size: 0.92rem; }
-.field .help { color: var(--text2); font-size: 0.85rem; }
-.field .error { color: var(--bad-text); font-size: 0.85rem; font-weight: 600; }
+.field > label, .field-label { font-weight: 600; font-size: var(--fs-md); }
+.field .help { color: var(--text2); font-size: var(--fs-sm); }
+.field .error { color: var(--bad-text); font-size: var(--fs-sm); font-weight: 600; }
 
 .input, .select, textarea.input {
   width: 100%; height: 38px; padding: 0 12px;
-  border: 1px solid var(--line-strong); border-radius: var(--r);
+  border: 1px solid var(--field-line); border-radius: var(--r);
   background: var(--card); color: var(--text);
   transition: border-color var(--dur-quick), box-shadow var(--dur-quick);
 }
@@ -116,8 +119,10 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .input.invalid { border-color: var(--bad); }
 .input.lg { height: 48px; font-size: 1.1rem; }
 .select { appearance: none; padding-right: 34px; cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, var(--text2) 50%), linear-gradient(135deg, var(--text2) 50%, transparent 50%);
-  background-position: calc(100% - 17px) 16px, calc(100% - 12px) 16px; background-size: 5px 5px; background-repeat: no-repeat; }
+  /* two thin strokes, the same chevron the other pickers draw */
+  background-image: linear-gradient(45deg, transparent calc(50% - 0.9px), var(--text2) calc(50% - 0.9px) calc(50% + 0.9px), transparent calc(50% + 0.9px)),
+    linear-gradient(-45deg, transparent calc(50% - 0.9px), var(--text2) calc(50% - 0.9px) calc(50% + 0.9px), transparent calc(50% + 0.9px));
+  background-position: calc(100% - 20px) 17px, calc(100% - 15px) 17px; background-size: 5px 5px; background-repeat: no-repeat; }
 .search-input { position: relative; }
 .search-input .icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; }
 .search-input .input { padding-left: 36px; }
@@ -126,18 +131,19 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
 .toggle .track {
-  position: relative; width: 40px; height: 24px; flex: none; border-radius: 99px; background: var(--line-strong);
+  position: relative; width: 40px; height: 24px; flex: none; border-radius: 99px; background: var(--field-line);
   transition: background-color var(--dur-base) var(--ease);
 }
 .toggle .track::after {
   content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
-  background: var(--text2); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-  transition: transform var(--dur-base) var(--ease-spring), width var(--dur-quick) var(--ease), background-color var(--dur-base);
+  background: var(--knob); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform-origin: left center; transition: transform var(--dur-base) var(--ease), background-color var(--dur-base);
 }
-.toggle:active .track::after { width: 22px; }
+/* pressed, the knob stretches toward where it's going */
+.toggle:active .track::after { transform: scaleX(1.22); }
 .toggle input:checked + .track { background: var(--accent); }
 .toggle input:checked + .track::after { transform: translateX(16px); background: var(--on-accent); }
-.toggle:active input:checked + .track::after { transform: translateX(12px); }
+.toggle:active input:checked + .track::after { transform: translateX(12px) scaleX(1.22); }
 .toggle input:focus-visible + .track { outline: 2.5px solid var(--focus); outline-offset: 2px; }
 .toggle input:disabled + .track { opacity: 0.5; }
 
@@ -153,12 +159,12 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .segmented { display: inline-flex; flex-wrap: wrap; max-width: 100%; padding: 3px; gap: 2px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); }
 .segmented button {
   height: 30px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text2);
-  font-weight: 650; font-size: 0.88rem; cursor: pointer; white-space: nowrap;
+  font-weight: 600; font-size: var(--fs-sm); cursor: pointer; white-space: nowrap;
   transition: background-color var(--dur-quick), color var(--dur-quick), transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick);
 }
 .segmented button:hover { color: var(--text); }
 .segmented button:active { transform: scale(0.96); }
-.segmented button[aria-pressed='true'] { background: var(--card); color: var(--text); box-shadow: var(--shadow-2); }
+.segmented button[aria-pressed='true'] { background: var(--card); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--accent), var(--shadow-2); }
 
 /* slider */
 .slider { display: flex; align-items: center; gap: 12px; }
@@ -169,11 +175,11 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .slider input[type='range']::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; margin-top: -7px; border-radius: 50%; background: var(--card); border: 2px solid var(--accent); box-shadow: var(--shadow-2); transition: transform var(--dur-quick) var(--ease); }
 .slider input[type='range']::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--card); border: 2px solid var(--accent); box-shadow: var(--shadow-2); }
 .slider input[type='range']:active::-webkit-slider-thumb { transform: scale(1.15); }
-.slider .value { min-width: 4.2em; text-align: right; font-weight: 650; color: var(--text2); }
+.slider .value { min-width: 4.2em; text-align: right; font-weight: 600; color: var(--text2); }
 
 /* number with steppers */
-.stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-strong); border-radius: var(--r); background: var(--card); overflow: hidden; flex-shrink: 0; }
-.stepper input { width: 5em; height: 36px; border: 0; background: transparent; text-align: center; font-weight: 650; -moz-appearance: textfield; }
+.stepper { display: inline-flex; align-items: center; border: 1px solid var(--field-line); border-radius: var(--r); background: var(--card); overflow: hidden; flex-shrink: 0; }
+.stepper input { width: 5em; height: 36px; border: 0; background: transparent; text-align: center; font-weight: 600; -moz-appearance: textfield; }
 .stepper input::-webkit-inner-spin-button, .stepper input::-webkit-outer-spin-button { appearance: none; margin: 0; }
 .stepper button { width: 34px; height: 36px; border: 0; background: transparent; color: var(--text2); cursor: pointer; display: grid; place-items: center; transition: background-color var(--dur-quick); }
 .stepper button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
@@ -182,14 +188,14 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 /* one ring for the whole field; a focused − or + shows by its shading */
 .stepper:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .stepper :is(input, button):focus-visible { outline: none; }
-.stepper button:focus-visible { background: var(--surface-3); color: var(--text); }
-.stepper .unit { padding-right: 10px; color: var(--text3); font-size: 0.85rem; white-space: nowrap; }
+.stepper button:focus-visible { outline: 2.5px solid var(--focus); outline-offset: -4px; color: var(--text); }
+.stepper .unit { padding-right: 10px; color: var(--text3); font-size: var(--fs-sm); white-space: nowrap; }
 
 /* color swatches */
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {
   width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line-strong);
-  cursor: pointer; transition: transform var(--dur-quick) var(--ease-spring), box-shadow var(--dur-quick);
+  cursor: pointer; transition: transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick);
   display: grid; place-items: center; color: #fff; background: var(--swatch, var(--surface-3));
 }
 .swatch:hover { transform: scale(1.1); }
@@ -205,14 +211,14 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 /* ---------------------------------------------------------------- progress */
 
 .bar { position: relative; height: 8px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
-.bar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--accent); width: 0; transition: width var(--dur-page) var(--ease); }
+.bar > span { position: absolute; inset: 0; border-radius: inherit; background: var(--accent); transform: translateX(-100%); transition: transform var(--dur-base) var(--ease); }
 .bar.good > span { background: var(--good); }
 .bar.thin { height: 5px; }
 .bar.thick { height: 12px; }
 .ring { transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-linecap: round; }
 .ring .track { stroke: var(--surface-3); }
-.ring .fill { stroke: var(--accent); transition: stroke-dashoffset var(--dur-page) var(--ease); }
+.ring .fill { stroke: var(--accent); transition: stroke-dashoffset var(--dur-base) var(--ease); }
 .ring.good .fill { stroke: var(--good); }
 
 /* ---------------------------------------------------------------- tabs */
@@ -220,24 +226,25 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: var(--sp-5); }
 .tabs button {
   position: relative; height: 40px; padding: 0 14px; border: 0; background: transparent; color: var(--text2);
-  font-weight: 650; white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-quick), background-color var(--dur-quick);
+  font-weight: 600; white-space: nowrap; cursor: pointer; border-radius: var(--r-sm) var(--r-sm) 0 0; transition: color var(--dur-quick), background-color var(--dur-quick);
 }
 .tabs button:hover { color: var(--text); background: var(--surface-2); }
 .tabs button[aria-selected='true'] { color: var(--accent-text); }
-.tabs button[aria-selected='true']::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2.5px; border-radius: 2px; background: var(--accent); animation: fade-in var(--dur-base); }
+.tabs button[aria-selected='true']::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2.5px; border-radius: 2px; background: var(--accent); }
 
 /* ---------------------------------------------------------------- menus */
 
 .menu {
   position: fixed; z-index: 70; min-width: 200px; max-width: 320px; padding: 5px;
   border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-3);
-  animation: pop-in var(--dur-quick) var(--ease) both; transform-origin: top left;
+  transform-origin: top left;
   /* a long menu (many sets to move to) scrolls inside the window */
   max-height: calc(100vh - 16px); overflow-y: auto; overscroll-behavior: contain;
 }
+.menu.placed { animation: pop-in var(--dur-quick) var(--ease) both; } /* starts once it's in place, so the whole entrance shows */
 .menu button {
   display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 7px 10px; border: 0; border-radius: var(--r-sm);
-  background: transparent; color: var(--text); text-align: left; cursor: pointer; font-weight: 550; line-height: 1.3; overflow-wrap: anywhere;
+  background: transparent; color: var(--text); text-align: left; cursor: pointer; font-weight: 500; line-height: 1.3; overflow-wrap: anywhere;
 }
 .menu button:hover:not(:disabled) { background: var(--surface-2); }
 .menu button:focus-visible { background: var(--surface-2); outline: 2px solid var(--focus); outline-offset: -2px; }
@@ -253,21 +260,27 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 
 .scrim {
   position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 32px;
-  background: color-mix(in oklab, var(--bg) 55%, rgba(0, 0, 0, 0.35)); backdrop-filter: blur(3px);
+  background: color-mix(in oklab, var(--bg) 62%, rgba(0, 0, 0, 0.4));
   animation: fade-in var(--dur-base) var(--ease) both;
 }
 /* the title and the buttons stay in view; only the body scrolls when the window is short */
 .dialog {
   width: min(480px, 100%); max-height: calc(100vh - 64px); display: flex; flex-direction: column; overflow: hidden;
   border: 1px solid var(--line); border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow-3);
-  animation: pop-in var(--dur-base) var(--ease-spring) both;
+  animation: pop-in var(--dur-base) var(--ease) both;
 }
 .dialog.wide { width: min(760px, 100%); }
+/* a dialog wrapped in a form or a box of its own (setup, a prompt, the party and theme editors) lays out the
+   same way, so its body scrolls and its buttons stay in view */
+.dialog > :has(> .dialog-body) { display: flex; flex-direction: column; min-height: 0; }
 .dialog-head { display: flex; align-items: flex-start; gap: 12px; padding: 22px 24px 8px; }
-.dialog-head h2 { font-size: 1.25rem; flex: 1; }
+.dialog-head h2 { font-size: var(--fs-lg); flex: 1; }
 .dialog-head, .dialog-foot { flex: none; }
 /* a soft shadow shows at an edge only while there's more to scroll to past it */
 .dialog-body {
+  /* no scroll anchoring: in Chromium, pressing a map tile at the foot of the scrolled picker (its :active scale)
+     made the list jump a row, so the click landed on the tile above */
+  overflow-anchor: none;
   flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 24px 20px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 14px; color: var(--text2);
   --edge: color-mix(in oklab, var(--text) 16%, transparent);
   background:
@@ -284,11 +297,14 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 /* ---------------------------------------------------------------- messages */
 
 /* across the window (not half of it, as left: 50% would leave a message), each one centred */
-.toasts { position: fixed; z-index: 90; left: 16px; right: 16px; bottom: 24px; display: grid; gap: 8px; justify-items: center; pointer-events: none; }
+.toasts { position: fixed; z-index: 90; left: 16px; right: 16px; bottom: 24px; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
 .toast {
   display: flex; align-items: center; gap: 12px; min-height: 46px; max-width: 560px; padding: 8px 8px 8px 16px;
   border-radius: var(--r-lg); background: var(--text); color: var(--surface); box-shadow: var(--shadow-3);
-  font-weight: 600; pointer-events: auto; animation: rise-in var(--dur-base) var(--ease-spring) both;
+  font-weight: 600; pointer-events: auto;
+  /* a transition, not a keyframe, so a second message doesn't restart the first; it leaves through leave.ts */
+  transition: opacity var(--dur-base) var(--ease), translate var(--dur-base) var(--ease);
+  @starting-style { opacity: 0; translate: 0 8px; }
 }
 .toast .icon { flex: none; }
 .toast.good .icon { color: color-mix(in oklab, var(--good) 70%, var(--surface)); }
@@ -307,13 +323,13 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .banner > .icon { flex: none; color: var(--warn-text); }
 .banner.info > .icon { color: var(--accent-text); }
 .banner.bad > .icon { color: var(--bad-text); }
-.banner p { flex: 1; font-size: 0.93rem; }
+.banner p { flex: 1; font-size: var(--fs-md); }
 
 /* ---------------------------------------------------------------- empty states */
 
 .empty { display: grid; justify-items: center; text-align: center; gap: 10px; padding: 48px 24px; color: var(--text2); }
 .empty svg.art { width: 150px; height: auto; margin-bottom: 6px; }
-.empty :is(h2, h3) { color: var(--text); font-size: 1.15rem; font-family: var(--font-serif); }
+.empty :is(h2, h3) { color: var(--text); font-size: var(--fs-lg); font-family: var(--font-serif); }
 .empty p { max-width: 420px; }
 .empty .row { margin-top: 8px; }
 
@@ -321,12 +337,14 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 
 .stat { display: grid; gap: 2px; }
 .stat .value { font-size: 1.7rem; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
-.stat .label { color: var(--text2); font-size: 0.85rem; font-weight: 600; }
+.stat .label { color: var(--text2); font-size: var(--fs-sm); font-weight: 600; }
 
 /* ---------------------------------------------------------------- switching themes (see paint() in ui/theme.ts) */
 
 /* where view transitions exist, the whole page cross-fades as one snapshot */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 340ms; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+/* the new snapshot is the page as it ends up: an element's own color fade would only lag inside it, repainting each frame */
+html:active-view-transition *, html:active-view-transition *::before, html:active-view-transition *::after { transition: none !important; }
 /* elsewhere, each element's colors fade */
 html.theme-switching body, html.theme-switching body * { transition: background-color 300ms var(--ease), color 300ms var(--ease), border-color 300ms var(--ease), fill 300ms, stroke 300ms !important; }
 
@@ -337,9 +355,9 @@ html.theme-switching body, html.theme-switching body * { transition: background-
 .whats-new-list li { display: flex; gap: 12px; align-items: flex-start; }
 .whats-new-list li > span:last-child { display: grid; gap: 2px; min-width: 0; }
 .whats-new-list b { color: var(--text); }
-.whats-new-list .muted { font-size: 0.92rem; }
-.whats-new-list a { font-size: 0.88rem; justify-self: start; }
-.whats-new-icon { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-text); }
+.whats-new-list .muted { font-size: var(--fs-md); }
+.whats-new-list a { font-size: var(--fs-sm); justify-self: start; }
+.whats-new-icon { flex: none; display: grid; padding-top: 2px; color: var(--accent-text); }
 
 /* ---------------------------------------------------------------- guided tours (see ui/tours/engine.tsx) */
 
@@ -356,7 +374,7 @@ html.theme-switching body, html.theme-switching body * { transition: background-
 }
 .tour-spot.none { left: 50% !important; top: 50% !important; width: 0 !important; height: 0 !important; box-shadow: 0 0 0 200vmax var(--dim); }
 .tour-spot.jump { transition: opacity var(--dur-base) var(--ease); }
-.tour.on .tour-spot { opacity: 1; }
+.tour.on .tour-spot, .tour.away .tour-spot { opacity: 1; }
 .tour-card {
   position: fixed; left: 50%; top: 50%; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto;
   display: grid; gap: 10px; padding: 16px 18px 14px; border-radius: var(--r-lg); outline: none;
@@ -365,11 +383,13 @@ html.theme-switching body, html.theme-switching body * { transition: background-
   transition: opacity var(--dur-base) var(--ease), transform var(--dur-base) var(--ease);
 }
 .tour.on .tour-card { opacity: 1; transform: none; pointer-events: auto; }
+/* a step that changes pages hides its card at once, before the next step's words fill it */
+.tour.away .tour-card { transition: none; }
 .tour-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -4px -6px -4px 0; }
-.tour-count { font-size: 0.78rem; font-weight: 700; color: var(--text2); letter-spacing: 0.02em; }
-.tour-card h2 { margin: 0; font-size: 1.15rem; }
+.tour-count { font-size: var(--fs-xs); font-weight: 700; color: var(--text2); letter-spacing: 0.02em; }
+.tour-card h2 { margin: 0; font-size: var(--fs-lg); }
 .tour-card p { margin: 0; line-height: 1.5; }
-.tour-look { display: flex; gap: 6px; align-items: baseline; font-size: 0.9rem; padding: 8px 10px; border-radius: var(--r); background: var(--surface-2); color: var(--text2); }
+.tour-look { display: flex; gap: 6px; align-items: baseline; font-size: var(--fs-md); padding: 8px 10px; border-radius: var(--r); background: var(--surface-2); color: var(--text2); }
 .tour-look svg { flex: none; align-self: center; }
 .tour-bar { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
 .tour-bar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width var(--dur-base) var(--ease); }
@@ -387,7 +407,7 @@ html[data-motion='reduced'] .tour-card { transform: none; }
 
 /* the first-open setup's way to bring data from another browser or computer, apart from Skip and Done */
 .setup-restore { margin-right: auto; }
-.tour-offer { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-color: var(--accent); animation: rise-in var(--dur-page) var(--ease) both; }
+.tour-offer { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-color: var(--accent); }
 .tour-offer p { margin: 2px 0 0; }
 .tour-offer .row { flex: none; gap: 8px; }
 .tour-offer-icon { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-text); }

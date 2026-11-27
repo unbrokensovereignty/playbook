@@ -4,6 +4,7 @@
  */
 import { emptyBackup, mergeBackup, type BackupData } from '../core/backup.ts';
 import { sanitizeQuery, type Query } from '../core/engine/query.ts';
+import { sanitizePutOff, type PutOff, type PutOffs } from '../core/games.ts';
 import { LIMITS, sanitizeGame, sanitizeGames, sanitizeMyPlay, sanitizeMyPlays, sanitizeParty, sanitizePlan, type Game, type MyPlay, type Party, type SavedPlan } from '../core/saved.ts';
 import { resolveSettings, sanitizeSetting, sanitizeSettings, SETTINGS, type SettingKey, type Settings } from '../core/settings.ts';
 import { sanitizeTheme, MAX_THEMES, type ThemePicks } from '../core/theme.ts';
@@ -33,6 +34,8 @@ export interface AppState {
   draft: Query | null;
   /** Questions asked lately, newest first. */
   recent: Query[];
+  /** Offers in Your games put away with Not now, by agent, with the record each rested on (core/games.ts). */
+  offersPutOff: PutOffs;
 }
 
 /** At most this many remembered page views and recent questions are kept. */
@@ -40,7 +43,7 @@ const VIEWS_MOST = 40;
 export const RECENT_MOST = 8;
 
 export const newAppState = (now: number): AppState => ({
-  firstUse: now, lastBackup: 0, backupSnooze: 0, welcomed: false, tips: [], keepAsked: false, seenVersion: '', views: {}, draft: null, recent: [],
+  firstUse: now, lastBackup: 0, backupSnooze: 0, welcomed: false, tips: [], keepAsked: false, seenVersion: '', views: {}, draft: null, recent: [], offersPutOff: {},
 });
 
 function sanitizeAppState(x: unknown, now: number): AppState {
@@ -59,6 +62,7 @@ function sanitizeAppState(x: unknown, now: number): AppState {
   }
   a.draft = isRecord(x.draft) ? sanitizeQuery(x.draft) : null;
   a.recent = Array.isArray(x.recent) ? x.recent.filter(isRecord).slice(0, RECENT_MOST).map(sanitizeQuery) : [];
+  a.offersPutOff = sanitizePutOff(x.offersPutOff);
   return a;
 }
 
@@ -109,7 +113,7 @@ export async function openRepo(o: OpenOptions = {}): Promise<{ repo: Repo; quara
 /** Changes to one setting this close together (a slider dragged, a stepper pressed again) are one undo step. */
 export const SETTING_JOIN_MS = 1500;
 
-export interface NewPlan { name: string; note?: string; query: Query; team?: string[] }
+export interface NewPlan { name: string; note?: string; query: Query; team?: string[]; party?: string[] }
 export type PlanPatch = Partial<Pick<SavedPlan, 'name' | 'note' | 'query' | 'team' | 'starred'>>;
 
 export class Repo {
@@ -217,7 +221,16 @@ export class Repo {
     this.updateApp({ recent: [clean, ...rest].slice(0, RECENT_MOST) });
   }
 
-  clearRecent(): void { if (this.app().recent.length) this.updateApp({ recent: [] }); }
+  /** Forgets the recent questions, as one undoable change (Home's Clear says so, with an Undo). */
+  clearRecent(): void {
+    if (this.app().recent.length) this.db.transact('Clear your recent questions', (tx) => tx.put('meta', 'app', { ...this.app(), recent: [] }));
+  }
+
+  /** Puts away an offer in Your games until the record behind it changes, as one undoable change. */
+  putOffOffer(agent: string, p: PutOff, label: string): void {
+    const app = this.app();
+    this.db.transact(label, (tx) => tx.put('meta', 'app', { ...app, offersPutOff: { ...app.offersPutOff, [agent]: p } }));
+  }
 
   noteBackup(): void { this.updateApp({ lastBackup: this.clock() }); }
 
@@ -226,7 +239,7 @@ export class Repo {
   savePlan(p: NewPlan): SavedPlan | null {
     if (this.db.values('plans').length >= LIMITS.plans) return null;
     const now = this.clock();
-    const plan = sanitizePlan({ id: uid('p'), name: p.name, note: p.note ?? '', query: p.query, team: p.team ?? [], starred: false, created: now, updated: now }, now);
+    const plan = sanitizePlan({ id: uid('p'), name: p.name, note: p.note ?? '', query: p.query, team: p.team ?? [], party: p.party ?? [], starred: false, created: now, updated: now }, now);
     if (!plan) return null;
     this.db.transact(`Save “${plan.name}”`, (tx) => tx.put('plans', plan.id, plan));
     return plan;
@@ -370,7 +383,7 @@ export class Repo {
 
   /** Deletes everything (Settings → Data). One undoable change. */
   eraseAll(): void {
-    // a fresh start: the tips show again, and the app counts from now (all of it undone together)
-    this.restore(emptyBackup(), 'replace', 'Erase everything', { tips: [], firstUse: this.clock(), recent: [], draft: null });
+    // a fresh start: the setup and the tips show again, and the app counts from now (all of it undone together)
+    this.restore(emptyBackup(), 'replace', 'Erase everything', { welcomed: false, tips: [], firstUse: this.clock(), recent: [], draft: null, offersPutOff: {} });
   }
 }

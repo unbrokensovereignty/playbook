@@ -72,3 +72,18 @@ test('skipping the setup keeps the usual start, and it isn’t asked again', asy
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('on a short laptop window the first launch shows its buttons, and its questions scroll', async ({ page, errors }) => {
+  await page.setViewportSize({ width: 1280, height: 600 });
+  await open(page, 'home', { setup: true });
+  const setup = page.getByRole('dialog', { name: 'Welcome to Playbook' });
+  await expect(setup).toBeVisible();
+  await still(page);
+  // the dialog clips what's outside it, so each button must sit inside the dialog's box as well as the window
+  const box = (await setup.boundingBox())!;
+  for (const name of ['Done', 'Skip']) {
+    const b = (await setup.getByRole('button', { name, exact: true }).boundingBox())!;
+    expect(b.y + b.height, `${name} is inside the dialog`).toBeLessThanOrEqual(Math.min(600, box.y + box.height) + 0.5);
+  }
+  expect(errors).toEqual([]);
+});

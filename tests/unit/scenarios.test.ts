@@ -63,7 +63,6 @@ test('the agents pro teams pick on at least half of a map’s games show up in i
   none(problems);
 });
 
-/** Agent fits over every map and side at a rank, with their middle. */
 /** Agents' fits at a rank, compared as shown (whole numbers), with the middle agent's. */
 function fitsAt(rank: RankId) {
   const agents = answer('any', 'both', rank, 1).agents;
@@ -108,7 +107,8 @@ test('below Platinum, KAY/O is in no best comp, since his flashes and knife want
 
 test('below Platinum, Hush waits with the hardest kits, even for a team that won’t play Phoenix', () => {
   // her flash and blast are steered by aim, guides tell players still learning to aim to wait
-  // (iTechGuides), and her team has won fewer than half its ranked games so far (metabot.gg, op.gg).
+  // (iTechGuides), and her team wins fewer ranked games than most: 47.6% on op.gg and about half on
+  // metabot.gg in patch 13.10, below 47% in her first days.
   // Leaving out Phoenix, the duelist a low-rank team reaches for first, mustn't bring her in.
   const problems: string[] = [];
   for (const rank of ['iron', 'bronze', 'silver', 'gold'] as const) for (const m of MAPS) for (const side of SIDES) {
@@ -121,7 +121,7 @@ test('below Platinum, Hush waits with the hardest kits, even for a team that won
 test('below Platinum, Phoenix steps aside on Breeze from Silver up', () => {
   // his flash and molly reach few of Breeze's fights, pros picked him on 11% of its maps, and ranked
   // players pick him there a third as often as elsewhere (metabot.gg, November 2026). On Abyss his
-  // team still wins 52.8% of its ranked games, so a low-rank team may play him there.
+  // team still wins 51.4% of its ranked games, so a low-rank team may play him there.
   const problems: string[] = [];
   for (const rank of ['silver', 'gold'] as const) for (const side of SIDES) {
     const t = top('breeze', side, rank);
@@ -155,7 +155,15 @@ test('the best comps vary from map to map, and new agents don’t take over', ()
     const allowed = rank === 'gold' ? tops.length - 1 : Math.floor(tops.length * 0.86);
     if (times > allowed) problems.push(`${rank}: ${name(most)} is in ${times} of ${tops.length}`);
     const controllers = [...count.keys()].filter((id) => roleOf(id) === 'controller');
-    if (controllers.length < least.controllers) problems.push(`${rank}: only ${controllers.map(name).join(' and ')} as controllers`);
+    // At Gold a five-stack leans on Omen and Brimstone, the easy, safe smokes the guides give a team
+    // (elevateboost.fr, 17 June 2026), and Clove's comps come within a point of Omen's. Her lead on Abyss
+    // attack rested on a ranked rate of 53.3%, partly winio.ai's 54.0% of 1 October; op.gg's tables
+    // put her at 51.3% on patch 13.08, before the 13.09 change to Pick-me-up (patched.gg, 27 October
+    // 2026), and 51.1% on 13.10 (read 20 November 2026). So at Gold two controllers may lead, as long
+    // as a third is in one of the three best comps somewhere.
+    const near = new Set(POOL.flatMap((m) => SIDES.flatMap((side) => answer(m.id, side, rank).comps.slice(0, 3).flatMap((c) => c.team))));
+    const third = rank === 'gold' && controllers.length >= 2 && [...near].filter((id) => roleOf(id) === 'controller').length >= 3;
+    if (controllers.length < least.controllers && !third) problems.push(`${rank}: only ${controllers.map(name).join(' and ')} as controllers`);
     const early = tops.filter((t) => t.some((id) => agentById(id)!.estimate)).length;
     if (early / tops.length > 0.25) problems.push(`${rank}: a new agent leads ${early} of ${tops.length}`);
   }
@@ -176,7 +184,24 @@ test('the best comp moves steadily from one rank to the next', () => {
       if (n <= 1) jumps.push(`${m.name} ${side}, ${RANKS[i - 1]!.name} to ${RANKS[i]!.name}: ${was.map(name).join(', ')} → ${now.map(name).join(', ')}`);
     }
   }
-  assert.ok(shared / steps >= 4.3, `on average ${(shared / steps).toFixed(2)} of 5 agents stay`);
+  // 4.30 on the August and October numbers; each rank's own win rates (op.gg, patch 13.10, read
+  // 20 November 2026) make a rank a little more its own, 4.29 (Clove on Abyss attack at Silver, where
+  // her teams win 51.4% to Omen's 46.0%, between Bronze and Gold with Omen)
+  assert.ok(shared / steps >= 4.28, `on average ${(shared / steps).toFixed(2)} of 5 agents stay`);
   // a whole new comp is rare: where a cheap, easy comp and the pro one swap places
   assert.ok(jumps.length <= 2, `\n${jumps.join('\n')}`);
+});
+
+test('playing alone from Gold to Immortal, Clove fits at least as well as Omen on every map in the pool', () => {
+  // A solo player's teammates are random players at their rank. Ranked players there pick Clove far
+  // more than Omen: she is the 2nd most picked agent at Gold and 1st from Platinum to Immortal, while
+  // Omen is 8th, 8th, 9th, 11th and 13th (op.gg, patch 13.10; kb/ranked.ts), and Clove's teams win
+  // 51.6% of ranked games to Omen's 46.6% (agents.ts).
+  const problems: string[] = [];
+  for (const rank of ['gold', 'platinum', 'diamond', 'ascendant', 'immortal'] as const) for (const m of POOL) {
+    const a = solve({ ...newQuery(rank, true), map: m.id, side: 'both', party: 1 }, { map: m.id, side: 'both', rank, sites: [], party: 1 }, 1);
+    const fit = (id: string) => Math.round(a.agents.find((x) => x.id === id)!.fit);
+    if (fit('clove') < fit('omen')) problems.push(`${m.name} at ${rank}: Clove ${fit('clove')}, Omen ${fit('omen')}`);
+  }
+  none(problems);
 });

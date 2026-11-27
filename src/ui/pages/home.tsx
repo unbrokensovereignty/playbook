@@ -1,7 +1,7 @@
 /**
  * Home: a map to plan for, the questions you asked lately, your saved plans, the agents you play and your parties, a word
  * about agents that are new or on their way, and (until it's taken or put off) the offer of a tour.
- * Until you've set it up, the offer to (setup.tsx).
+ * Until you've set it up, it offers to (setup.tsx).
  */
 import { PageHead } from '../shell.tsx';
 import { Button } from '../components/controls.tsx';
@@ -22,8 +22,7 @@ import { SETTINGS } from '../../core/settings.ts';
 import { unsureWords } from '../../core/engine/sure.ts';
 import { tierOf } from '../../core/engine/weights.ts';
 import { PATCH, POOL, POOL_SINCE } from '../../core/kb/maps.ts';
-import { comfortOf, poolsOf, type Party } from '../../core/saved.ts';
-import type { PartySize } from '../../core/engine/query.ts';
+import { partyQuery, partySize, type Party } from '../../core/saved.ts';
 import { diffDays, fmtLongDay, keyOf } from '../../core/dates.ts';
 import { listJoin } from '../../core/text.ts';
 import { plural } from '../../core/util.ts';
@@ -124,8 +123,8 @@ function SavedPlans() {
           {plans.slice(0, 5).map((p) => (
             <li key={p.id}>
               <button type="button" class="list-row" onClick={() => { play('tap'); go('saved', p.id); }}>
-                {p.team.length ? <TeamIcons team={p.team} size={26} /> : <MapThumb id={p.query.map} class="small" />}
-                <span class="list-row-text"><b>{p.starred && <Icon name="star" size={14} class="star-on" />}{p.name}</b><small class="muted">{askedTitle(p.query)} · {askedLine(p.query)}</small></span>
+                {p.team.length ? <TeamIcons team={p.team} party={p.party} locked={p.query.locked} size={26} /> : <MapThumb id={p.query.map} class="small" />}
+                <span class="list-row-text"><b title={p.name}>{p.starred && <Icon name="star" size={14} class="star-on" />}{p.name}</b><small class="muted">{askedTitle(p.query)} · {askedLine(p.query)}</small></span>
                 <Icon name="chevron-right" size={18} class="faint" />
               </button>
             </li>
@@ -137,7 +136,7 @@ function SavedPlans() {
 }
 
 function PartyCard({ p }: { p: Party }) {
-  const size = p.players.length as PartySize;
+  const size = partySize(p);
   return (
     <li class="party-card">
       <div class="grow">
@@ -152,7 +151,7 @@ function PartyCard({ p }: { p: Party }) {
           ))}
         </div>
       </div>
-      <Button size="sm" kind="soft" icon="planner" onClick={() => planWith({ party: size, pools: poolsOf(p), comfort: comfortOf(p) })}>Plan</Button>
+      <Button size="sm" kind="soft" icon="planner" onClick={() => planWith(partyQuery(p))}>Plan</Button>
     </li>
   );
 }
@@ -184,7 +183,7 @@ function YourAgents() {
             const best = maps.every((x) => x.fit !== undefined) ? [...maps].sort((x, y) => y.fit! - x.fit!).slice(0, 2).map((x) => x.m.name) : [];
             return (
               <li key={a.id}>
-                <button type="button" class="list-row" data-tip={unsure && unsureWords({ map: 'any', side: 'both', rank, sites: [] }, a.id, unsure)} onClick={() => { play('page'); go('agents', a.id); }}>
+                <button type="button" class="list-row" data-tip={unsure && unsureWords({ map: 'any', side: 'both', rank, sites: [] }, a.id, unsure, s.showNumbers)} onClick={() => { play('page'); go('agents', a.id); }}>
                   <AgentIcon id={a.id} size={32} />
                   <span class="list-row-text"><b>{a.name}</b><small class="muted">{best.length ? `Best on ${listJoin(best)}` : 'Working out their best maps…'}</small></span>
                   {fit !== undefined ? <Fit fit={fit} tier={tierOf(fit)} label={`${a.name} at ${rankWord(rank)}`} compact unsure={!!unsure} /> : <span class="faint small">…</span>}
@@ -198,6 +197,9 @@ function YourAgents() {
   );
 }
 
+/** How many parties Home shows; the rest are on Saved. */
+const HOME_PARTIES = 5;
+
 function Parties() {
   const r = watch('parties');
   const parties = r.parties();
@@ -205,10 +207,12 @@ function Parties() {
     <section class="panel stack home-list">
       <div class="row-between">
         <h2>Your parties</h2>
-        <Button size="sm" kind="quiet" icon={parties.length ? 'edit' : 'plus'} onClick={() => go('saved', 'parties')}>{parties.length ? 'Edit' : 'Make a party'}</Button>
+        {parties.length > HOME_PARTIES
+          ? <Button size="sm" kind="quiet" iconRight="arrow-right" onClick={() => go('saved', 'parties')}>All {parties.length}</Button>
+          : <Button size="sm" kind="quiet" icon={parties.length ? 'edit' : 'plus'} onClick={() => go('saved', 'parties')}>{parties.length ? 'Edit' : 'Make a party'}</Button>}
       </div>
       {parties.length
-        ? <ul class="plain-list party-cards">{parties.map((p) => <PartyCard key={p.id} p={p} />)}</ul>
+        ? <ul class="plain-list party-cards">{parties.slice(0, HOME_PARTIES).map((p) => <PartyCard key={p.id} p={p} />)}</ul>
         : <p class="muted">Save the people you queue with and the agents each of you plays. Plans for the party then give each player one of their own agents.</p>}
     </section>
   );

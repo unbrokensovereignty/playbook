@@ -21,5 +21,18 @@ above.
 
 Playbook includes third-party components that keep their own licenses:
 Preact and Preact Signals (MIT License), and the Literata and Atkinson
-Hyperlegible fonts (SIL Open Font License 1.1). They are listed in the app
-under Help → About.
+Hyperlegible fonts (SIL Open Font License 1.1). The sound sets use
+recordings from three sources:
+
+- SND's Sine and Piano packs, by Dentsu (https://snd.dev/), under the SND
+  terms of use. They may not be sold or shared as sound files on their own.
+- "UI Utility Pack Vol 1" by JC Sounds
+  (https://opengameart.org/content/jc-sounds-ui-utility-pack-vol-1), under
+  the Creative Commons Attribution 4.0 license (CC BY 4.0,
+  https://creativecommons.org/licenses/by/4.0/). Clarity's tap, tick and
+  toggle sounds come from it, with their tags removed.
+- "UI Sounds" (Notices) by HaelDB (https://opengameart.org/content/ui-sounds-0),
+  released under CC0 1.0.
+
+assets/sounds/CREDITS.md lists each file. They are listed in the app under
+Help → About.

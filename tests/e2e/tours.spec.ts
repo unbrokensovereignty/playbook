@@ -7,6 +7,8 @@ import { capitalize, countWord } from '../../src/core/util.ts';
 /** The step on screen once it has arrived: its count line, whether its target is missing, and whether the card covers the spotlight. */
 async function stepNow(page: Page) {
   await expect(page.locator('.tour.on')).toBeVisible();
+  // keys rest while a step arrives and a moment after it shows, so wait for both
+  await expect(page.locator('.tour-card[aria-busy]')).toHaveCount(0, { timeout: 5000 });
   await page.waitForTimeout(300);
   // then until the card and the spotlight stop moving: a scroll to the target can take longer than that
   let last = '';
@@ -74,8 +76,10 @@ test('every tour runs to the end with the keyboard, each step lit and clear of i
   for (const t of TOURS) {
     await page.locator(`#start-tour-${t.id}`).click();
     for (let i = 0; i < t.steps.length; i++) {
-      const s = await stepNow(page);
       const where = `${t.name}, step ${i + 1}`;
+      // the step changes a frame after the key, so wait for it before measuring
+      await expect(page.locator('.tour-count'), where).toHaveText(`${t.name} · ${i + 1} of ${t.steps.length}`);
+      const s = await stepNow(page);
       expect(s.count, where).toBe(`${t.name} · ${i + 1} of ${t.steps.length}`);
       expect(s.missing, `${where}: its target isn't on screen`).toBe(false);
       expect(s.lit, where).toBe(!!t.steps[i]!.target);
@@ -96,15 +100,15 @@ test('a tour goes back, ends with Esc, keeps the page from being clicked, and en
   await open(page, 'help/tours');
   await page.locator('#start-tour-start').click();
   const of = tourById('start')!.steps.length;
-  expect((await stepNow(page)).count).toBe(`Getting started · 1 of ${of}`);
+  await expect.poll(async () => (await stepNow(page)).count).toBe(`Getting started · 1 of ${of}`);
   // two quick presses still show every step
   await page.keyboard.press('Space');
   await page.keyboard.press('Space');
-  expect((await stepNow(page)).count).toBe(`Getting started · 2 of ${of}`);
+  await expect.poll(async () => (await stepNow(page)).count).toBe(`Getting started · 2 of ${of}`);
   await page.keyboard.press('Space');
-  expect((await stepNow(page)).count).toBe(`Getting started · 3 of ${of}`);
+  await expect.poll(async () => (await stepNow(page)).count).toBe(`Getting started · 3 of ${of}`);
   await page.keyboard.press('ArrowLeft');
-  expect((await stepNow(page)).count).toBe(`Getting started · 2 of ${of}`);
+  await expect.poll(async () => (await stepNow(page)).count).toBe(`Getting started · 2 of ${of}`);
   await expect(page).toHaveURL(/#\/home$/);
   // a click on the page lands on the tour's cover, not on the map under it
   await page.locator('.home-maps .map-tile').first().click({ force: true });

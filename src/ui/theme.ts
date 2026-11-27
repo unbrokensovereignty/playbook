@@ -33,10 +33,10 @@ export function currentPicks(s: Settings, own: readonly ThemePicks[], dark: bool
   return findTheme(base === 'dark' ? s.themeDark : s.themeLight, own, base);
 }
 
-/** The motion level in effect: Full, Reduced (fades only) or Off. */
 /** How to scroll to something: smoothly only with motion at full. */
 export const scrollMotion = (): ScrollBehavior => (document.documentElement.dataset.motion === 'full' ? 'smooth' : 'auto');
 
+/** The motion level in effect: Full, Reduced (fades only) or Off. */
 export const motionLevel = (s: Settings, reduced: boolean): 'full' | 'reduced' | 'off' =>
   s.motion === 'off' ? 'off' : s.motion === 'reduced' || (s.motion === 'system' && reduced) ? 'reduced' : 'full';
 
@@ -47,6 +47,21 @@ interface Painted { css: string; scheme: Base; id: string }
 /** The theme most recently asked for; a switch that's overtaken by a newer one is dropped. */
 let wanted: Painted | null = null;
 let switching: ViewTransition | null = null;
+// while the cross-fade runs, the page under it is a snapshot that can't be clicked. A press that lands
+// on it ends the fade, and its click goes to what's under the pointer, so trying colours quickly works.
+let through = false;
+if (typeof addEventListener === 'function') {
+  addEventListener('pointerdown', (e) => {
+    through = !!switching && e.target === document.documentElement && e.button === 0;
+    if (through) switching?.skipTransition();
+  }, true);
+  addEventListener('click', (e) => {
+    if (!through || !e.isTrusted) return;
+    through = false;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    el?.closest<HTMLElement>('button, a, input, label, summary, [role=button], [tabindex]')?.click();
+  }, true);
+}
 let fallbackTimer = 0;
 
 function write(p: Painted) {
@@ -68,7 +83,7 @@ function write(p: Painted) {
  *
  * A real switch cross-fades. Where the browser can, it fades a snapshot of the whole page on the GPU
  * (a view transition), so nothing re-lays out or repaints frame by frame and the page's gradient
- * fades along with everything else. Other browsers fade each element's colors instead.
+ * fades along with everything else. Elements' own color transitions are off while it runs (components.css). Other browsers fade each element's colors instead.
  * Previews change at once, so dragging a color picker stays smooth.
  */
 function paint(picks: ThemePicks, accent: string, animate: boolean) {

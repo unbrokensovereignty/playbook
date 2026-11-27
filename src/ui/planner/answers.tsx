@@ -8,18 +8,20 @@ import { ROLES, type Role } from '../../core/kb/roles.ts';
 import { whyBelow } from '../../core/engine/explain.ts';
 import type { Situation } from '../../core/engine/model.ts';
 import { answerModel, teamFit, type AgentAnswer, type SituationAnswer } from '../../core/engine/plan.ts';
-import { asksBest, nothingFixed, partyOf, type Query } from '../../core/engine/query.ts';
+import { asksBest, nothingFixed, partyOf, type PartySize, type Query } from '../../core/engine/query.ts';
+import { plural } from '../../core/util.ts';
 import { asksMapPicks } from '../../core/engine/mappick.ts';
 import { unsureWords } from '../../core/engine/sure.ts';
+import { fitValue } from '../../core/engine/summary.ts';
 import { tierOf } from '../../core/engine/weights.ts';
 import { listJoin } from '../../core/text.ts';
 import { AgentIcon, MapThumb, RoleIcon } from '../art.tsx';
-import { Button, Empty, Segmented, Tabs } from '../components/controls.tsx';
+import { Button, Empty, Segmented, Tabs, tabIdOf } from '../components/controls.tsx';
 import { Icon } from '../icons.tsx';
-import { go, useView } from '../state.ts';
+import { go, useSettings, useView } from '../state.ts';
 import { play } from '../sound.ts';
 import { tourOnComp } from '../tours/now.ts';
-import { CompRow, Fit, TeamIcons } from './comp.tsx';
+import { CompRow, Fit, holdInPlace, TeamIcons, useHeldInPlace } from './comp.tsx';
 import { compareComps } from './compare.tsx';
 import { MapPicks } from './mappicks.tsx';
 import { ask, bestOf, run } from './store.ts';
@@ -38,9 +40,19 @@ export function Answers() {
   const key = r ? JSON.stringify(r.query) : '';
   // a new question starts on its best situation with the best comp open
   useEffect(() => { setPick(0); setOpen(0); }, [key]);
+  // the answers dim, and say they're updating, only when an answer takes a moment: most take a frame
+  // or three and a party change up to about 250 ms, and dimming for those would only make the page blink
+  const working = r?.status === 'working';
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!working) { setLate(false); return; }
+    const t = setTimeout(() => setLate(true), 300);
+    return () => clearTimeout(t);
+  }, [working, key]);
+  const slow = working && late;
   if (!r) return <div class="answers"><Working text="Getting ready" /></div>;
   if (r.status === 'error') {
-    return <div class="answers"><Empty title="Something went wrong" actions={<Button onClick={() => ask({}, true)}>Try again</Button>}>The Planner couldn’t answer this question. The details are under Help, About.</Empty></div>;
+    return <div class="answers"><Empty title="Something went wrong" actions={<Button onClick={() => ask({}, true)}>Try again</Button>}>The Planner couldn’t answer this question. The details are under Help → About.</Empty></div>;
   }
   if (r.status === 'working' && !r.answers.length) return <div class="answers"><Working text={r.total > 1 ? `Comparing ${r.total} situations` : 'Finding comps'} done={r.done} total={r.total} /></div>;
   const vary = asksBest(r.query);
@@ -49,13 +61,13 @@ export function Answers() {
   if (!ans) return null;
   const none = !ans.comps.length;
   return (
-    <div class={`answers${r.status === 'working' ? ' stale' : ''}`} aria-busy={r.status === 'working'}>
+    <div class={`answers${slow ? ' stale' : ''}`} aria-busy={r.status === 'working'}>
       <header class="answers-head" data-tour="answers-head">
         <div class="grow">
           <h2>{vary.length ? `Best ${listJoin(vary.map((v) => (v === 'map' ? 'maps' : v === 'side' ? 'sides' : 'ranks')))} for you` : askedTitle(r.query)}</h2>
-          <p class="muted small">{askedLine(r.query)} · {ans.count.toLocaleString('en-US')} {r.query.party === 5 ? 'possible comps' : `possible ${partyOf(r.query.party).plural}`} checked</p>
+          <p class="muted small">{askedLine(r.query)} · {checkedWords(ans.count, r.query.party)}</p>
         </div>
-        {r.status === 'working' && <span class="row muted small"><span class="spinner" aria-hidden="true" />Updating</span>}
+        {slow && <span class="row muted small"><span class="spinner" aria-hidden="true" />Updating</span>}
       </header>
 
       {asksMapPicks(r.query) && r.status === 'done' && <MapPicks answers={answers} q={r.query} onPick={(i) => { setPick(i); setOpen(0); }} />}
@@ -64,6 +76,7 @@ export function Answers() {
 
       {vary.length > 0 && <h2 class="answers-sub">{situationWord(ans.situation, vary)}</h2>}
       <Tabs<Tab> label="Answers" tour="answers-tabs" value={tab} onChange={setTab} tabs={[['comps', r.query.party === 5 ? 'Comps' : `${partyWord(r.query.party)} picks`], ['agents', 'Agents']]} />
+      <div class="tab-panel" role="tabpanel" aria-labelledby={tabIdOf('Answers', tab)}>
       {none ? (
         <Empty title="No comp fits all of these choices" actions={onlyPools(r.query)
           ? <Button onClick={() => ask({ pools: [], comfort: {} }, true)}>Plan with any agents</Button>
@@ -81,9 +94,13 @@ export function Answers() {
         <AgentList s={ans.situation} agents={ans.agents} plan={(id) => ask({ include: [...new Set([...r.query.include, id])].slice(0, r.query.party) }, true)}
           versus={r.query.party === 5 ? { ans, newAgents: r.query.newAgents } : undefined} />
       )}
+      </div>
     </div>
   );
 }
+
+/** "142,506 possible comps checked", "1 possible solo pick checked". */
+const checkedWords = (n: number, party: PartySize): string => `${plural(n, party === 5 ? 'possible comp' : party === 1 ? 'possible solo pick' : `possible ${partyWord(party).toLowerCase()}`, party === 5 ? 'possible comps' : `possible ${partyOf(party).plural}`)} checked`;
 
 function Working({ text, done, total }: { text: string; done?: number; total?: number }) {
   return (
@@ -143,6 +160,8 @@ function Situations({ answers, vary, pick, setPick, same }: { answers: readonly 
 export function AgentList({ s, agents, plan, versus }: { s: Situation; agents: readonly AgentAnswer[]; plan?: (id: string) => void; versus?: { ans: SituationAnswer; newAgents: boolean }} ) {
   const [role, setRole] = useView<Role | 'all'>('planner.role', 'all', (v) => v === 'all' || ROLES.some((r) => r.id === v));
   const [open, setOpen] = useState('');
+  const numbers = useSettings().showNumbers;
+  useHeldInPlace(open);
   const shown = agents.filter((a) => role === 'all' || agentById(a.id)?.role === role);
   return (
     <div class="agent-list">
@@ -153,7 +172,7 @@ export function AgentList({ s, agents, plan, versus }: { s: Situation; agents: r
           const on = open === a.id;
           return (
             <li key={a.id} class={on ? 'open' : ''}>
-              <button type="button" class="agent-row" aria-expanded={on} data-tip={a.unsure ? unsureWords(s, a.id, a.unsure) : undefined} onClick={() => { play('tick'); setOpen(on ? '' : a.id); }}>
+              <button type="button" class="agent-row" aria-expanded={on} data-tip={a.unsure ? unsureWords(s, a.id, a.unsure, numbers) : undefined} onClick={(e) => { play('tick'); holdInPlace(e.currentTarget); setOpen(on ? '' : a.id); }}>
                 <span class="agent-rank num">{agents.indexOf(a) + 1}</span>
                 <AgentIcon id={a.id} size={34} />
                 <span class="agent-name"><b>{ag.name}</b><span class="muted small row"><RoleIcon role={ag.role} size={14} />{ROLES.find((r) => r.id === ag.role)!.name}</span></span>
@@ -163,8 +182,8 @@ export function AgentList({ s, agents, plan, versus }: { s: Situation; agents: r
                 <div class="agent-more">
                   <p class="muted">{ag.line}</p>
                   <div class="row wrap"><span class="muted small">Best comp with {ag.name}:</span><TeamIcons team={a.team} size={28} /></div>
-                  {a.edge && <p class="small">{edgeWords(a.id, a.edge, true)}</p>}
-                  {a.unsure && <p class="small muted">{unsureWords(s, a.id, a.unsure)}</p>}
+                  {a.edge && <p class="small">{edgeWords(a.id, a.edge, true, numbers)}</p>}
+                  {a.unsure && <p class="small muted">{unsureWords(s, a.id, a.unsure, numbers)}</p>}
                   {versus && <WhyNot a={a} versus={versus} />}
                   <div class="row wrap">
                     {plan && <Button size="sm" kind="soft" icon="planner" onClick={() => plan(a.id)}>Plan with {ag.name}</Button>}
@@ -189,9 +208,16 @@ function WhyNot({ a, versus: { ans, newAgents } }: { a: AgentAnswer; versus: { a
   const why = whyBelow(answerModel(ans), best.team, a.team);
   const fit = Math.round(teamFit(ans.situation, a.team, newAgents, ans.comfort).fit), top = Math.round(best.fit);
   const names = (ids: readonly string[]) => listJoin(ids.map((id) => agentById(id)?.name ?? id));
+  // with fit numbers off in Settings, the two fits are named by their tiers (fitValue), as the rows show them
+  const numbers = useSettings().showNumbers;
+  const fits = numbers
+    ? <>fits <span class="num">{fitValue(fit)}</span> against <span class="num">{fitValue(top)}</span>{fit >= top ? ', as good as the best' : ''}</>
+    : fit >= top ? 'fits as well as the best'
+    : tierOf(fit) === tierOf(top) ? `is ${fitValue(fit, false)}, the same tier as the best comp`
+    : `is ${fitValue(fit, false)} where the best comp is ${fitValue(top, false)}`;
   return (
     <div class="why-not">
-      <p><b>Why not {name} in the best comp?</b> {name}’s best comp plays {names(why.in)} instead of {names(why.out)}, and fits <span class="num">{fit}</span> against <span class="num">{top}</span>{fit >= top ? ', as good as the best' : ''}.</p>
+      <p><b>Why not {name} in the best comp?</b> {name}’s best comp plays {names(why.in)} instead of {names(why.out)}, and {fits}.</p>
       {why.loses.length > 0 && <div><span class="muted small">Where it falls short</span><ul class="reasons">{why.loses.map((x) => <li key={x}>{x}</li>)}</ul></div>}
       {why.gains.length > 0 && <div><span class="muted small">Where it’s better</span><ul class="reasons">{why.gains.map((x) => <li key={x}>{x}</li>)}</ul></div>}
     </div>

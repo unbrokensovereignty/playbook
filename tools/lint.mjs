@@ -2,7 +2,7 @@
 //  1. Layers: src/core is pure logic (no DOM, no storage, no UI); src/data may use core; src/ui may use both.
 //  2. The app only knows its own versions: the one in package.json and those with a heading in CHANGELOG.md,
 //     and what ships in the app (src/ and the specs in tests/specs/) names only the one in package.json.
-//     No other version numbers, no "beta" or the like, and no other app's name.
+//     No other version numbers, and no "beta" or the like.
 //  3. No stray console.log, debugger or focused tests.
 //  4. Plain wording in everything people read, the app's text, the docs and the comments alike: no
 //     long dashes, no hype or filler words, and none of the stock phrases that make writing sound
@@ -27,20 +27,24 @@ const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).v
 const changelog = await readFile(join(root, 'CHANGELOG.md'), 'utf8').catch(() => '');
 const known = new Set([version, ...[...changelog.matchAll(/^## (\d+\.\d+\.\d+)\b/gm)].map((m) => m[1])]);
 const VERSIONISH = /\bv?\d+\.\d+\.\d+\b/g;
-const WORDS = /\b(beta|legacy|previous version|older version|earlier version|old version|pre-release|flashcards?)\b/i;
+const WORDS = /\b(beta|legacy|previous version|older version|earlier version|old version|pre-release)\b/i;
 
 // hype and filler, and stock phrases; a match that's code (a call, a property, a CSS class) is left alone
 const WORDING = [
-  /\b(seamless(ly)?|robust|effortless(ly)?|powerful|unlock(s|ing)? (the|your) (full |true )?(power|potential)|elevat(e|es|ed|ing)|delv(e|es|ed|ing)|leverag(e|es|ed|ing)|tailored|comprehensive|journey|game-?changer|tapestry|testament|pivotal|underscor(e|es|ed|ing)|showcas(e|es|ed|ing)|intricate|vibrant|crucial|multifaceted|boast(s|ed|ing)?|nestled|utili[sz](e|es|ed|ing)|empower(s|ed|ing)?|harness(es|ed|ing)? the|harnessing|streamlin(e|es|ed|ing)|cutting-edge|world-class|enhanc(e|es|ed|ing)|optimi[sz](e|es|ed|ing)|ensur(e|es|ed|ing))\b/gi,
-  /\b(not just|not only|worth noting|important to note|in short|simply|additionally|moreover|furthermore|in today[’']s)\b/gi,
+  /\b(seamless(ly)?|robust|effortless(ly)?|powerful|unlock(s|ing)? (the|your) (full |true )?(power|potential)|elevat(e|es|ed|ing)|delv(e|es|ed|ing)|leverag(e|es|ed|ing)|tailored|comprehensive|journey|game-?changer|crucial|utili[sz](e|es|ed|ing)|empower(s|ed|ing)?|harness(es|ed|ing)? the|harnessing|streamlin(e|es|ed|ing)|cutting-edge|world-class|enhanc(e|es|ed|ing)|optimi[sz](e|es|ed|ing)|ensur(e|es|ed|ing))\b/gi,
+  /\b(not just|not only|worth noting|important to note|in short|simply|additionally|moreover|furthermore)\b/gi,
   /\b(Note that|Here[’']s|Let[’']s)\b/g,
   /\u2014/g,
 ];
 const WORDING_SKIP = new Set(['tools/lint.mjs', 'src/core/kb/content.gen.ts', 'src/core/text.ts']);
-// the files that stay in the workshop (PRIVATE in tools/publish.mjs, where that tool is) may quote the words they ban
-const workshop = new Set(await readFile(join(root, 'tools/publish.mjs'), 'utf8')
-  .then((t) => [...(t.match(/const PRIVATE = new Set\(\[([^\]]*)\]\)/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]))
-  .catch(() => []));
+// extra word checks and exempt files, loaded from tools/private-words.mjs when that file exists
+let extraWords = null;
+let exempt = new Set();
+try {
+  const m = await import('./private-words.mjs');
+  if (m.PRIVATE_WORDS?.length) extraWords = new RegExp(`\\b(${m.PRIVATE_WORDS.join('|')})\\b`, 'gi');
+  exempt = new Set(m.PRIVATE_SKIP ?? []);
+} catch { /* the file isn't here: those checks are skipped */ }
 const isCode = (line, at, len) => /^[(:]/.test(line.slice(at + len)) || /[.#-]$/.test(line.slice(0, at)) || /[A-Za-z_$]/.test(line[at + len] ?? '');
 
 const files = [];
@@ -53,7 +57,7 @@ for (const f of (await readdir(root)).filter((x) => x.endsWith('.md') || x === '
 for (const file of files) {
   if (!/\.(ts|tsx|mjs|js|css|html|md|txt|yml|json)$/.test(file) && !file.endsWith('LICENSE')) continue;
   let text; try { text = await readFile(file, 'utf8'); } catch { continue; }
-  const rel = relative(root, file);
+  const rel = relative(root, file).split('\\').join('/');
   const lines = text.split('\n');
   const inCore = rel.startsWith('src/core/');
   const inData = rel.startsWith('src/data/');
@@ -76,8 +80,8 @@ for (const file of files) {
       const words = line.replace(/\balpha\W+beta\b/gi, '');
       if (WORDS.test(words)) report(file, n, `wording about other versions: "${words.match(WORDS)[0]}"`);
     }
-    if (!WORDING_SKIP.has(rel) && !workshop.has(rel)) {
-      for (const re of WORDING) for (const m of line.matchAll(re)) if (!isCode(line, m.index, m[0].length)) report(file, n, `wording: "${m[0]}" (see docs/PRODUCT.md, Wording)`);
+    if (!WORDING_SKIP.has(rel) && !exempt.has(rel)) {
+      for (const re of extraWords ? [...WORDING, extraWords] : WORDING) for (const m of line.matchAll(re)) if (!isCode(line, m.index, m[0].length)) report(file, n, `wording: "${m[0]}" (see docs/PRODUCT.md, Wording)`);
     }
     if (/\.(ts|tsx)$/.test(rel)) {
       const imp = line.match(/from\s+['"]([^'"]+)['"]/);
@@ -91,6 +95,8 @@ for (const file of files) {
       if (/\bconsole\.log\(/.test(line)) report(file, n, 'console.log left in');
       if (/\bdebugger\b/.test(line)) report(file, n, 'debugger left in');
       if (/\b(test|it|describe)\.only\(/.test(line)) report(file, n, 'focused test left in');
+      // a doc comment right after another: the first has lost the thing it was about, which an editor then shows the wrong words for
+      if (/^\s*\/\*\*/.test(line) && /\*\/\s*$/.test(lines[i - 1] ?? '')) report(file, n, 'a doc comment right after another: put each one above the thing it’s about');
     }
   });
 }

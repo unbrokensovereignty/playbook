@@ -1,0 +1,16 @@
+JC Sounds: UI Utility Pack Vol 1
+https://opengameart.org/content/jc-sounds-ui-utility-pack-vol-1
+
+Released by JC Sounds under the Creative Commons Attribution 4.0
+International license (CC BY 4.0).
+https://creativecommons.org/licenses/by/4.0/
+Full legal text: https://creativecommons.org/licenses/by/4.0/legalcode
+
+You may share and adapt the material for any purpose, commercial included,
+as long as you give appropriate credit (the author, the work and the
+license, with a link) and say whether changes were made. No further
+restrictions may be added that stop others doing what the license allows.
+
+Changes made for Playbook: the files had their tags removed, and the app
+plays them at a set level with a short fade at the end. Their sound is
+otherwise unchanged.

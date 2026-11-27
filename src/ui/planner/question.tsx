@@ -7,9 +7,9 @@ import { MAPS, mapById } from '../../core/kb/maps.ts';
 import { RANKS } from '../../core/kb/ranks.ts';
 import { ROLES, type Role } from '../../core/kb/roles.ts';
 import { NEW_AGENTS } from '../../core/kb/new-agents.ts';
-import { myComfort, myPools, PARTY_SIZES, placesTaken, withMine, type PartySize, type Query } from '../../core/engine/query.ts';
+import { myComfort, myPools, PARTY_SIZES, partyOf, placesTaken, sanitizeQuery, withMine, type PartySize, type Query } from '../../core/engine/query.ts';
 import { agentById } from '../../core/kb/agents.ts';
-import { comfortOf, poolsOf } from '../../core/saved.ts';
+import { partyQuery, poolsOf } from '../../core/saved.ts';
 import { listJoin } from '../../core/text.ts';
 import { countWord } from '../../core/util.ts';
 import { MapThumb, RoleIcon } from '../art.tsx';
@@ -56,7 +56,8 @@ export function Question({ q }: { q: Query }) {
   const partyMenu = (e: MouseEvent) => {
     const items: MenuItem[] = parties.map((p) => ({
       label: `${p.name} (${p.players.length === 2 ? 'duo' : p.players.length === 3 ? 'trio' : 'five-stack'})`, icon: 'users',
-      run: () => ask({ party: p.players.length as PartySize, pools: poolsOf(p), comfort: comfortOf(p), locked: [] }, true),
+      // a saved party is a new group, so teammates locked in for the last one go without a word
+      run: () => refit({ ...partyQuery(p), locked: [] }, false),
     }));
     if (items.length) items.push('divider');
     items.push({ label: parties.length ? 'Edit parties' : 'Make a party', icon: 'edit', run: () => go('saved', 'parties') });
@@ -84,6 +85,25 @@ export function Question({ q }: { q: Query }) {
       </div>
     );
   };
+  // another party size can't keep every choice (a size picked here, or a saved party's): what doesn't fit goes,
+  // and the page says so rather than quietly
+  const refit = (patch: Partial<Query>, sayLocked = true) => {
+    const next = sanitizeQuery({ ...q, ...patch });
+    const party = next.party, a = `A ${partyOf(party).name.toLowerCase()}`;
+    const gone = (was: readonly string[], now: readonly string[]) => was.filter((id) => !now.includes(id)).map((id) => agentById(id)?.name ?? id);
+    const out = gone(q.include, next.include), lockedOut = sayLocked ? gone(q.locked, next.locked) : [];
+    const who = party === 1 ? 'You play one agent' : `${a} plays ${countWord(party)} agents`;
+    const said = [
+      out.length && `${who}, so ${listJoin(out)} came off the list.`,
+      lockedOut.length && (party === 5
+        ? `A five-stack has no random teammates, so ${listJoin(lockedOut)} came off Teammates locked in.`
+        : `${a} has ${countWord(5 - party)} random ${5 - party === 1 ? 'teammate' : 'teammates'}, so ${listJoin(lockedOut)} came off Teammates locked in.`),
+      ROLES.some((r) => q.roles[r.id] !== next.roles[r.id]) && `The role counts don’t fit ${party === 1 ? 'one player' : a.toLowerCase()}, so ${ROLES.some((r) => next.roles[r.id] !== undefined) ? 'the ones that don’t are' : 'they’re'} back to Any.`,
+    ].filter((x): x is string => !!x);
+    ask(next, true);
+    if (said.length) toast(said.join(' '));
+  };
+  const resize = (party: PartySize) => refit({ party, pools: withMe ? myPools(party, mine) : [], comfort: withMe ? myComfort(mine, s.myComfort) : {} });
   const fresh = freshQuestion();
   const changed = JSON.stringify(q) !== JSON.stringify(fresh);
   // planning with the agents you play (Settings → You): one of them for you
@@ -129,8 +149,8 @@ export function Question({ q }: { q: Query }) {
       </Part>
 
       <Part title="Party" tour="q-party">
-        <div class="row wrap">
-          <Segmented label="Party size" value={String(q.party)} onChange={(x) => ask({ party: Number(x) as PartySize, pools: withMe ? myPools(Number(x) as PartySize, mine) : [], comfort: withMe ? myComfort(mine, s.myComfort) : {} }, true)}
+        <div class="row wrap q-party-row">
+          <Segmented label="Party size" value={String(q.party)} onChange={(x) => resize(Number(x) as PartySize)}
             options={PARTY_SIZES.map((p) => [String(p.id), p.name] as const)} />
           <Button size="sm" kind="quiet" icon="users" iconRight="chevron-down" onClick={partyMenu}>Saved party</Button>
         </div>

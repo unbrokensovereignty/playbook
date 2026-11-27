@@ -134,3 +134,17 @@ test('a page that doesn’t exist, or an agent or map that doesn’t, says so an
   await expect(page.locator('main h1').first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// the colour cross-fade is a snapshot of the page: a click made during it still reaches what's under the pointer
+test('trying accent colours quickly, every click lands', async ({ page, errors }) => {
+  await open(page, 'settings/appearance');
+  const swatches = page.getByRole('radiogroup', { name: 'Accent color' }).getByRole('radio');
+  await swatches.nth(1).click();
+  await page.waitForTimeout(200);
+  await swatches.nth(2).click();
+  await expect(swatches.nth(2)).toHaveAttribute('aria-checked', 'true');
+  await page.waitForTimeout(200);
+  await swatches.nth(3).click();
+  await expect(swatches.nth(3)).toHaveAttribute('aria-checked', 'true');
+  expect(errors).toEqual([]);
+});

@@ -10,7 +10,7 @@ It's free and it's a single HTML file. There's nothing to install, no account to
 
 ## Getting started
 
-1. Download `Playbook-v0.5.5.html` from the [latest release](https://github.com/unbrokensovereignty/playbook/releases/latest). There's also a copy in the root of this repository.
+1. Download `Playbook-v0.6.0.html` from the [latest release](https://github.com/unbrokensovereignty/playbook/releases/latest). There's also a copy in the root of this repository.
 2. Open it in Chrome, Edge, Firefox or Safari on a computer. Double-clicking the file works.
 3. Pick your rank, how you usually queue and the agents you play. It takes a few seconds, and every plan starts from there.
 4. Go to the Planner and ask. Anything you leave blank, Playbook works out for you.
@@ -62,8 +62,9 @@ Everything Playbook knows is built into the file.
 | What | Source |
 | --- | --- |
 | Agents, abilities, maps, callouts and art | The game's own content |
-| Ranked pick and win rates, across all ranks and on each map | [metabot.gg](https://www.metabot.gg) and [winio.ai](https://winio.ai) |
-| The agents picked most at each rank, and pick and win rates at Radiant | Blitz, as listed by [Esports Tales](https://www.esportstales.com) |
+| Ranked pick and win rates across all ranks | [metabot.gg](https://www.metabot.gg) and [op.gg](https://op.gg/valorant) |
+| Ranked win rates on each map | [metabot.gg](https://www.metabot.gg) |
+| The agents picked most at each rank, how often their teams win there, and pick and win rates at Radiant | [op.gg](https://op.gg/valorant) |
 | Pro comps on every map from this year's top events, and on Icebox from Masters Toronto 2025, the last top event that played it | [vlr.gg](https://www.vlr.gg) |
 | Plays, tips and matchups | Written from the ability text and from how pro teams and coaches play each map |
 

@@ -14,6 +14,8 @@ import { newQuery } from '../../src/core/engine/query.ts';
 import { belowParts, explainTeam, PHASES, swapLine, whyBelow } from '../../src/core/engine/explain.ts';
 import { listJoin } from '../../src/core/text.ts';
 import { PLAN_NOTE } from '../../src/core/engine/weights.ts';
+import { fitOf } from '../../src/core/kb/effects.ts';
+import { planSays } from './lines.ts';
 import { scoreTeam } from '../../src/core/engine/search.ts';
 import { D, modelFor, viaIn, type Model, type SidePick, type Situation } from '../../src/core/engine/model.ts';
 import type { RankId } from '../../src/core/kb/ranks.ts';
@@ -62,6 +64,9 @@ function possessives(line: string, team: readonly string[], m: Model): string[] 
   }
   return bad;
 }
+/** The key of an agent's ability by its name ("Devour" is Reyna's Q). */
+const keyOf = (a: Agent, name: string): string => kitOf(a.id)!.abilities.find((k) => k.name === name)?.key ?? '';
+
 /** A small, seeded random number source, so a failure can be run again. */
 function random(seed: number) {
   let s = seed;
@@ -182,7 +187,9 @@ test('how a comp wins names, for each part, an ability of an agent in it that br
       if (p.ability && !abilityNames(a.id, viaIn(m, a, p.dim)).includes(p.ability)) problems.push(`"${e.plan}": ${a.name}’s ${p.ability} isn't what brings ${p.dim}`);
       if (!p.ability && !viaIn(m, a, p.dim).includes('G')) problems.push(`"${e.plan}": ${a.name} brings ${p.dim} with an ability it doesn't name`);
       if (e.strengths.find((r) => r.dim === p.dim)!.cover < PLAN_NOTE.cover) problems.push(`"${e.plan}": the comp is short of ${p.dim}`);
-      if (!e.plan.includes(`${PHASES[p.phase][p.dim]}${p.ability ? ` with ${p.ability}` : ''}`) && !(p.dim === 'duel' && !p.ability && e.plan.includes('wins the gunfights'))) problems.push(`"${e.plan}": doesn't say ${p.dim}`);
+      if (!planSays(e.plan, p)) problems.push(`"${e.plan}": doesn't say ${p.dim}${p.ability ? ` with ${p.ability}` : ''}`);
+      // a heal of the agent's own keeps them in the fights they win, which is all a plan says it does
+      if (p.dim === 'duel' && p.ability && (fitOf(p.agent, keyOf(a, p.ability), 'sustain') === 'self') !== !!p.heals) problems.push(`"${e.plan}": ${p.ability} heals ${a.name}, or doesn't`);
     }
     // every agent the plan names has a part in it, and no other agent is named
     for (const a of AGENTS) if (new RegExp(`\\b${a.name.replace('/', '\\/')}\\b`).test(e.plan) !== e.planParts.some((p) => p.agent === a.id)) problems.push(`"${e.plan}": ${a.name} named without a part, or a part without the name`);

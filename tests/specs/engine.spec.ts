@@ -1,23 +1,26 @@
 import { describe, spec, eq, ok, near } from './harness.ts';
-import { AGENTS, agentById } from '../../src/core/kb/agents.ts';
+import { AGENTS, agentById, type Agent } from '../../src/core/kb/agents.ts';
 import { NEW_AGENTS } from '../../src/core/kb/new-agents.ts';
 import { POOL, MAPS, MINIMAP_SCALE, RUN_SPEED, mapById } from '../../src/core/kb/maps.ts';
 import { rotations, runSeconds, siteWants, SITE_WANTS } from '../../src/core/engine/sites.ts';
-import { RANK_IDS } from '../../src/core/kb/ranks.ts';
-import { DIMS, ROLE_IDS } from '../../src/core/kb/roles.ts';
-import { D, N, ROLE_OF, kitShare, modelFor, proMixOf, proShare, roleIndex, type Situation } from '../../src/core/engine/model.ts';
+import { RANK_IDS, rankOf } from '../../src/core/kb/ranks.ts';
+import { DIMS, DIM_INFO, ROLE_IDS, type Dim } from '../../src/core/kb/roles.ts';
+import { PLAIN, plainKeys } from '../../src/core/kb/effects.ts';
+import { D, N, ROLE_OF, atRank, kitShare, mapWinOf, modelFor, proMixOf, proShare, rankWin, roleIndex, winEdge, winShare as winShareAt, type Situation } from '../../src/core/engine/model.ts';
 import { anyRoles, scoreTeam, searchTeams, TopK, walkTeams, type Rules } from '../../src/core/engine/search.ts';
 import { askFor, fillLikelihood, pickWeight, searchParties, type PartyRules } from '../../src/core/engine/party.ts';
 import { newQuery, placesTaken, sanitizeQuery, situationsOf, asksBest, nothingFixed, myPools, startingQuery, withMine, type Query } from '../../src/core/engine/query.ts';
 import { agentFitOf, answerModel, bestTeamFor, comfortValue, fitOf, modelForQuery, poolsFit, referenceFor, rulesOf, solve, teamFit } from '../../src/core/engine/plan.ts';
 import { asksMapPicks, mapPicks } from '../../src/core/engine/mappick.ts';
 import { ANSWERERS, answerOf, DUO_MAPS, proDuos, troubleFrom } from '../../src/core/engine/matchups.ts';
+import { LINEUPS } from '../../src/core/kb/lineups.ts';
 import { explainFor, explainTeam } from '../../src/core/engine/explain.ts';
 import { BRINGS_MOST, pickNow, selectQuery, SELECT_OTHERS, TEAM } from '../../src/core/engine/select.ts';
-import { COMFORT_OFFER, comfortOffers, recordBy, recordWords, winShare } from '../../src/core/games.ts';
+import { COMFORT_OFFER, comfortOffers, putOffOf, recordBy, recordWords, sanitizePutOff, winShare } from '../../src/core/games.ts';
 import type { Game } from '../../src/core/saved.ts';
 import { UNSETTLED, unsureWords } from '../../src/core/engine/sure.ts';
-import { COMFORT, MAP_PICK, ROLE_COST, SURE, TIERS, tierOf } from '../../src/core/engine/weights.ts';
+import { COMFORT, FIT, MAP_PICK, ROLE_COST, SURE, TIERS, tierOf } from '../../src/core/engine/weights.ts';
+import { RANK_WINS } from '../../src/core/kb/ranked.ts';
 
 const at = (map: string, side: Situation['side'] = 'both', rank: Situation['rank'] = 'gold', sites: Situation['sites'] = []): Situation => ({ map, side, rank, sites });
 const ix = (id: string) => agentById(id)!.index;
@@ -436,7 +439,13 @@ describe('duos and trios', () => {
     const rules: PartyRules = { include: [], allowed: () => true, roles: anyRoles(), locked: [], fillable: () => true };
     const party = [ix('jett'), ix('raze'), ix('reyna')];
     const ask = askFor(m, party, rules, 0.5);
-    eq(ask[0]!.role, 'controller', 'three duelists want a controller most');
+    // random teammates fill a missing controller nine times in ten (FILL_MISSING), so one comes with
+    // most fills unasked, and the role most worth asking for is whichever the likely fills lack most;
+    // a fourth duelist is never it
+    const controller = ask.find((x) => x.role === 'controller')!, last = ask[ask.length - 1]!;
+    ok(controller.chance > 0.8, `a controller comes with ${controller.chance} of the fills`);
+    eq(last.role, 'duelist', 'three duelists want a fourth duelist least');
+    ok(ask.every((x) => x === last || x.expected > last.expected + 0.1), 'any other role is worth far more than a fourth duelist');
     ok(ask.every((x) => x.chance > 0 && x.chance < 1), 'random teammates bring each role in some games, not all');
     // the two random teammates play two agents, so the chances of the four roles add up to between one and two
     const total = ask.reduce((n, x) => n + x.chance, 0);
@@ -474,9 +483,49 @@ describe('explanations', () => {
     const best = solve({ ...newQuery('immortal'), map: 'lotus', side: 'attack' }, s, 1).comps[0]!.team;
     const e = explainTeam(modelFor(s), best);
     ok(e.cons.length > 0);
-    const thin = e.cons.find((c) => c.startsWith('The comp is thinnest on ') || / only from .+, so (once|if) /.test(c));
-    if (thin) ok(!e.cons.some((c) => /^(Nobody brings|The comp is light on)|.+ comes? only from .+?(\. .+ needs more)?, so (?!once|if)/.test(c)), 'only when there is no real gap');
+    // (a con naming who brings a strength, in any of its leads, and the thinnest spot's second sentence)
+    const names = / comes? only from |^Only .+ brings? | rests? on | (?:is|are) all the .+ this comp has\.| the main source of | bring only a (?:little|few) /;
+    const then = /\. (?:Once (?:it’s|they’re) used|When (?:it’s|they’re) spent|After (?:that|those)|If .+? go(?:es)? down), /;
+    const thin = e.cons.find((c) => c.startsWith('The comp is thinnest on ') || (names.test(c) && then.test(c)));
+    if (thin) ok(!e.cons.some((c) => /^(Nobody brings|The comp is light on)/.test(c) || (names.test(c) && !then.test(c))), 'only when there is no real gap');
     ok(e.cons.every((x) => /[.]$/.test(x)));
+  });
+  spec('a source that brings none of a strength is never its main source, nor one it gets "a little" from', () => {
+    // an ability that does a plain strength is named however little the numbers make of it: here,
+    // nothing at all, so it can't be the main source or "a little" of anything
+    const comps: [string, Situation['side'], string[]][] = [
+      ['abyss', 'attack', ['iso', 'sova', 'skye', 'killjoy', 'omen']], ['abyss', 'attack', ['fade', 'raze', 'phoenix', 'viper', 'breach']],
+      ['abyss', 'attack', ['hush', 'iso', 'cypher', 'deadlock', 'fade']], ['haven', 'attack', ['deadlock', 'cypher', 'waylay', 'fade', 'breach']],
+      ['haven', 'attack', ['sage', 'fade', 'tejo', 'cypher', 'omen']],
+    ];
+    const main = (d: Dim) => new RegExp(`^(.+?) (?:is|are) the main source of ${DIM_INFO[d].has} here, with a little from (.+?)\\. `);
+    let seen = 0;
+    for (const [map, side, five] of comps) {
+      const m = modelFor(at(map, side));
+      for (const d of PLAIN) {
+        // (as the numbers have it, these comps do call a source the main one)
+        seen += explainTeam(m, five).cons.filter((c) => main(d).test(c)).length;
+        for (const id of five) {
+          if (!plainKeys(id, d)) continue;
+          const a = agentById(id)!, miss = Float64Array.from(m.miss);
+          miss[a.index * D + DIMS.indexOf(d)] = 1;
+          for (const c of explainTeam({ ...m, miss }, five).cons) {
+            const x = main(d).exec(c);
+            if (x) ok(!x[1]!.includes(`${a.name}’s`) && !x[2]!.includes(`${a.name}’s`), c);
+          }
+        }
+      }
+    }
+    ok(seen > 0, 'some cons call one source the main one');
+  });
+  spec('a ranked win rate quoted without a rank is the one the agent’s page shows', () => {
+    // at Radiant a five-stack's answers count the rate across all ranks, and Clove's there blends in
+    // the ranks below (rankWinAt, about 51.4%), where her page says 51.6%
+    const m = modelFor(at('haven', 'attack', 'radiant')), clove = agentById('clove')!;
+    const win = Float64Array.from(m.fitParts.win);
+    win[clove.index] = 0.05;
+    const line = explainTeam({ ...m, fitParts: { ...m.fitParts, win } }, ['clove', 'sova', 'killjoy', 'jett', 'breach']).pros.find((p) => p.includes(' of ranked games'));
+    eq(line, `Clove wins ${Math.round(clove.win)}% of ranked games, more than most agents.`);
   });
   spec('a new agent gets a note that the numbers are estimates', () => {
     for (const d of NEW_AGENTS) {
@@ -497,6 +546,33 @@ describe('explanations', () => {
     eq(kitShare(hush, 1), 1);
     // (Radiant's answers take in a little of Immortal's games, where it costs next to nothing)
     ok(Math.abs(modelFor(at('haven', 'attack', 'radiant')).fitParts.rank[ix('hush')]!) < 1e-4, 'next to nothing at Radiant');
+  });
+  spec('each rank’s own win rates count where op.gg has them, as far as their games go, and the rate across all ranks where it doesn’t', () => {
+    const t = (r: Situation['rank']) => rankOf(r).t;
+    const [clove, neon, viper, hush] = ['clove', 'neon', 'viper', 'hush'].map((id) => agentById(id)!) as [Agent, Agent, Agent, Agent];
+    // Clove's teams win more at Gold than across all ranks (op.gg, patch 13.10), so her rate counts
+    // for more there, and the model's win part is more than her rate across all ranks would give
+    ok(rankWin(clove, t('gold')) > clove.win + 0.2, `Clove at Gold: ${rankWin(clove, t('gold'))}`);
+    ok(winEdge(clove, undefined, t('gold')) > winEdge(clove, undefined, t('radiant')), 'more credit at Gold than at Radiant');
+    const m = modelFor(at('haven', 'attack', 'gold'));
+    ok(m.fitParts.win[ix('clove')]! > FIT.win * atRank('gold', winShareAt) * (clove.win - 50 + mapWinOf('haven', 'clove')), 'the model counts her Gold rate');
+    // the hard kits win less low down: Neon wins more than half her games across all ranks, about
+    // half at Silver and Gold, and her lead is back from Diamond, so her lead counts only up there
+    ok(neon.win > 50.5, 'Neon wins more than half her games across all ranks');
+    for (const r of ['silver', 'gold'] as const) ok(rankWin(neon, t(r)) < 50.3, `Neon at ${r}: ${rankWin(neon, t(r))}`);
+    ok(rankWin(neon, t('diamond')) > 50.5, 'Neon from Diamond');
+    // a hard kit that wins less than most still pays for it, and an easy one counts at every rank
+    ok(modelFor(at('haven', 'attack', 'silver')).fitParts.win[ix('viper')]! < 0, 'Viper at Silver');
+    ok(modelFor(at('haven', 'attack', 'silver')).fitParts.win[ix('clove')]! > 0, 'Clove at Silver');
+    // an agent outside a rank's twenty keeps their rate across all ranks
+    ok(!RANK_WINS.gold.agents.viper, 'Viper isn’t among the twenty picked most at Gold');
+    eq(rankWin(viper, t('gold')), viper.win, 'so she keeps her rate across all ranks');
+    // Radiant's own rates count through their own rule (RADIANT_WIN), so Radiant keeps the rate across all ranks here
+    eq(rankWin(clove, t('radiant')), clove.win, 'Radiant');
+    // a rate from few games moves only part of the way: Hush's teams win about 4 points fewer games at
+    // Iron than across all ranks, over some 7,000 games, so part of that counts
+    const iron = rankWin(hush, 0);
+    ok(iron < hush.win - 0.5 && iron > hush.win - 4, `Hush at Iron: ${iron}`);
   });
 });
 
@@ -604,6 +680,9 @@ describe('agent pages: playing against an agent, and who pros play them with', (
   spec('pro duos come from the lineups played, most often first, only with enough maps', () => {
     const { maps, duos } = proDuos('omen');
     ok(maps >= DUO_MAPS && duos.length === 4, `${maps} maps`);
+    // the counts are of lineups, one team's five on one map, so a map where both teams played Omen counts twice
+    eq(maps, LINEUPS.flatMap((l) => l.teams).filter((t) => t.agents.includes('omen')).length);
+    eq(duos[0]!.maps, LINEUPS.flatMap((l) => l.teams).filter((t) => t.agents.includes('omen') && t.agents.includes(duos[0]!.id)).length);
     for (let i = 1; i < duos.length; i++) ok(duos[i - 1]!.maps >= duos[i]!.maps, 'most first');
     for (const d of duos) near(d.share, d.maps / maps, 1e-9);
     for (const a of AGENTS) { const p = proDuos(a.id); ok(p.maps >= DUO_MAPS || p.duos.length === 0, `${a.id}: ${p.maps} maps`); }
@@ -691,5 +770,29 @@ describe('your record from your games', () => {
     eq(comfortOffers(many('jett', 2, n - 2), [], {}), [], 'still learning is only offered for your own agents');
     eq(comfortOffers(many('sova', n, 0), ['a', 'b', 'c', 'd'], {}).map((o) => o.add), [true], 'a winning agent who isn’t yours is offered while there’s room');
     eq(comfortOffers(many('sova', n, 0), ['a', 'b', 'c', 'd', 'e'], {}), [], 'and not when your list is full');
+    // a draw says nothing about how well you play, so it doesn't count toward the games an offer waits for
+    eq(comfortOffers(many('jett', 0, 0, n), ['jett'], {}), [], 'only draws');
+    eq(comfortOffers(many('omen', wins, 0, n - wins), ['omen'], {}), [], 'too few won or lost');
+    eq(comfortOffers(many('omen', wins, n - wins, 3), ['omen'], {}).map((o) => o.to), ['main'], 'draws beside enough won or lost games');
+  });
+  spec('Not now puts an offer away until the record behind it changes', () => {
+    const n = COMFORT_OFFER.games;
+    // two games past the fewest an offer waits for, so one can be deleted
+    const games = many('omen', n, 2);
+    const [offer] = comfortOffers(games, ['omen'], {});
+    ok(!!offer);
+    const away = { omen: putOffOf(offer!) };
+    eq(comfortOffers(games, ['omen'], {}, away), [], 'put away');
+    eq(comfortOffers([g('omen', 'draw', 'bind', 300), ...games], ['omen'], {}, away), [], 'a draw says nothing, so it stays away');
+    eq(comfortOffers([g('omen', 'win', 'bind', 300), ...games], ['omen'], {}, away).map((o) => o.to), ['main'], 'a game won since brings it back');
+    eq(comfortOffers(games.slice(0, -1), ['omen'], {}, away).map((o) => o.to), ['main'], 'a game deleted since brings it back too');
+    // an offer to add an agent you don't play yet that's put away leaves room for the next one
+    const room = ['a', 'b', 'c', 'd'];
+    const two = [...many('sova', n, 0), ...many('fade', n - 1, 1)];
+    eq(comfortOffers(two, room, {}).map((o) => o.agent), ['sova']);
+    eq(comfortOffers(two, room, {}, { sova: putOffOf(comfortOffers(two, room, {})[0]!) }).map((o) => o.agent), ['fade']);
+    // the record kept is sanitized like anything read back
+    eq(sanitizePutOff(undefined), {});
+    eq(sanitizePutOff({ omen: { to: 'main', wins: 6, losses: 4 }, jett: { to: 'best', wins: 1, losses: 9 }, 'NOT AN ID': { to: 'main', wins: 1, losses: 1 }, sova: { to: 'learning', wins: -1, losses: 2 }, fade: 'main' }), { omen: { to: 'main', wins: 6, losses: 4 } });
   });
 });

@@ -80,18 +80,17 @@ export interface MapDef {
 /**
  * How big each minimap is in the game: the share of the minimap's width one game unit (a centimetre)
  * covers, as the game's content gives it (its maps' xMultiplier, read from valorant-api.com on
- * 5 November 2026). Corrode's wasn't in what could be read, so its rotation times wait for the next
- * refresh of the game's content.
+ * 5 November 2026, and Corrode's on 14 November 2026 for patch 13.10).
  */
 export const MINIMAP_SCALE: Readonly<Record<string, number>> = {
-  abyss: 8.1e-5, ascent: 7e-5, bind: 5.9e-5, breeze: 7e-5, fracture: 7.8e-5, haven: 7.5e-5, icebox: 7.2e-5,
+  abyss: 8.1e-5, ascent: 7e-5, bind: 5.9e-5, breeze: 7e-5, corrode: 7e-5, fracture: 7.8e-5, haven: 7.5e-5, icebox: 7.2e-5,
   lotus: 7.2e-5, pearl: 7.8e-5, split: 7.8e-5, summit: 7.5e-5, sunset: 7.8e-5,
 };
-/** How fast a player runs with a rifle out, in metres a second (the Vandal's and Phantom's run speed). */
+/** How fast a player runs with a rifle out, in meters a second (the Vandal's and Phantom's run speed). */
 export const RUN_SPEED = 5.4;
 
 /** The game's patch that the numbers (pick rates, the map pool) were taken at. */
-export const PATCH = '13.09';
+export const PATCH = '13.10';
 /** The competitive pool since patch 13.08 (13 October 2026); it changes next on 6 January 2027. */
 export const POOL_SINCE = '2026-10-13';
 
@@ -152,7 +151,7 @@ const DEFS: readonly MapDef[] = [
     about: 'A two-site map with a three-lane mid. Mid and A Site have long sightlines, and B is tight, with narrow entries and many corners near the plant spots.',
     keys: 'Pros play two controllers here, Omen and Viper, with Fade for information and Waylay or Yoru to take space.',
     needs: { both: 'wall +.6; smoke +.15; recon +.2; angles -.3', attack: 'entry +.1', defense: 'stall +.15' },
-    places: { 'A Crane': [0.189, 0.236], 'A Elbow': [0.331, 0.112], 'A Link': [0.433, 0.402], 'A Lobby': [0.721, 0.347], 'A Main': [0.61, 0.235], 'A Pocket': [0.469, 0.112], 'A Site': [0.398, 0.192], 'A Yard': [0.483, 0.215], 'Attacker Side Spawn': [0.883, 0.501], 'B Arch': [0.177, 0.819], 'B Elbow': [0.317, 0.891], 'B Link': [0.398, 0.612], 'B Lobby': [0.662, 0.725], 'B Main': [0.534, 0.808], 'B Site': [0.401, 0.768], 'B Tower': [0.294, 0.736], 'Defender Side Spawn': [0.127, 0.505], 'Mid Bottom': [0.692, 0.49], 'Mid Stairs': [0.54, 0.498], 'Mid Top': [0.386, 0.501], 'Mid Window': [0.318, 0.501] },
+    places: { 'A Crane': [0.189, 0.25], 'A Elbow': [0.331, 0.112], 'A Link': [0.433, 0.402], 'A Lobby': [0.721, 0.347], 'A Main': [0.61, 0.235], 'A Pocket': [0.469, 0.112], 'A Site': [0.398, 0.192], 'A Yard': [0.483, 0.215], 'Attacker Side Spawn': [0.883, 0.501], 'B Arch': [0.177, 0.791], 'B Elbow': [0.317, 0.891], 'B Link': [0.398, 0.612], 'B Lobby': [0.662, 0.725], 'B Main': [0.534, 0.808], 'B Site': [0.401, 0.768], 'B Tower': [0.294, 0.736], 'Defender Side Spawn': [0.127, 0.505], 'Mid Bottom': [0.692, 0.49], 'Mid Stairs': [0.54, 0.498], 'Mid Top': [0.386, 0.501], 'Mid Window': [0.318, 0.501] },
     sites: [
       { id: 'A', about: 'Reached through A Main or from mid through A Link. A Yard, A Pocket, A Elbow and A Crane give defenders many corners.', needs: { both: 'clear +.15; recon +.1' } },
       { id: 'B', space: 'tight', about: 'Reached through B Main or from mid through B Link. B Tower and B Arch overlook the plant.', needs: { both: 'smoke +.1', attack: 'postplant +.1' } },
@@ -237,8 +236,10 @@ const DEFS: readonly MapDef[] = [
     id: 'summit', name: 'Summit', pool: true, space: 'mixed',
     mechanics: [{ id: 'walls', about: 'Three walls, on A between A Art and A Garden, in mid between Mid Window and Mid Bottom, and on B between B Tower and B Site, drop when their switch is shot and stay shut for the rest of the round.' }, { id: 'ropes', about: 'A rope climbs from B Gym up to B Tower.', weight: 0.5 }],
     about: 'A newer two-site map with a wide mid around Mid Fountain and Mid Tiles, and lots of cover on both sites.',
-    keys: 'Fast entry and information. Neon and Fade are the pro picks, with Chamber holding angles.',
-    needs: { both: 'entry +.15; recon +.25; duel +.15; wall +.15; mobility +.1; angles +.4', defense: 'stall +.15' },
+    keys: 'Fast entry and information. Neon and Fade are the pro picks, with Chamber holding angles and Sage’s Barrier Orb shutting a choke.',
+    // wall +.3: three walls that drop shut and narrow lanes into each site (hotspawn.com, June 2026), chokes
+    // Sage's wall blocks (esportnow.gg, mid 2026), and Sage and Harbor on 53% and 44% of maps at Champions 2026
+    needs: { both: 'entry +.15; recon +.25; duel +.15; wall +.3; mobility +.1; angles +.4', defense: 'stall +.15' },
     places: { 'A Art': [0.786, 0.259], 'A Cave': [0.94, 0.245], 'A Garden': [0.786, 0.391], 'A Hall': [0.629, 0.228], 'A Link': [0.65, 0.364], 'A Lobby': [0.693, 0.738], 'A Main': [0.745, 0.568], 'A Site': [0.919, 0.44], 'Attacker Side Spawn': [0.49, 0.903], 'B Drop': [0.058, 0.262], 'B Gym': [0.275, 0.186], 'B Link': [0.326, 0.405], 'B Lobby': [0.266, 0.688], 'B Main': [0.141, 0.495], 'B Site': [0.132, 0.301], 'B Tower': [0.149, 0.216], 'B Trophy': [0.338, 0.273], 'Defender Side Spawn': [0.514, 0.086], 'Mid Bend': [0.637, 0.491], 'Mid Bottom': [0.486, 0.421], 'Mid Fountain': [0.504, 0.582], 'Mid Tiles': [0.363, 0.595], 'Mid Top': [0.532, 0.686], 'Mid Window': [0.485, 0.329] },
     sites: [
       { id: 'A', about: 'Hit through A Main or from mid through A Link. A Garden, A Art, A Hall and A Cave surround the site.', needs: { both: 'clear +.1', attack: 'flash +.1' } },

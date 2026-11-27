@@ -1,7 +1,7 @@
 // Checks the engine against numbers from outside it, and checks that what it says is true.
 //
 // The benchmarks: pro play at Champions 2026 and Masters Santiago 2026 (kb/pro.ts) for the high
-// ranks, and ranked win rates and low-rank tier lists (metabot.gg, winio.ai, October 2026) for the
+// ranks, and ranked win rates (metabot.gg and op.gg, patch 13.10) and low-rank tier lists for the
 // low ones. The truth checks read every pro, con and note the explanations give for hundreds of
 // random teams and situations, and check each claim against the numbers behind it. Node only (too
 // slow for the in-app self-test); the random teams are the same on every run.
@@ -9,17 +9,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { solve, teamFit } from '../../src/core/engine/plan.ts';
 import { newQuery } from '../../src/core/engine/query.ts';
-import { D, atRank, kitShare, modelFor, needsFor, viaIn, type Situation } from '../../src/core/engine/model.ts';
-import { explainFor, explainTeam, STRONG, type ExplainFor } from '../../src/core/engine/explain.ts';
+import { D, atRank, kitShare, modelFor, needsFor, rankWinAt, viaIn, type Situation } from '../../src/core/engine/model.ts';
+import { explainFor, explainTeam, strongForms, type ExplainFor } from '../../src/core/engine/explain.ts';
+import { sourcesIn } from './lines.ts';
 import { KIT_NOTE, OPERATOR_NOTE, PLAY_RANK, tierOf, TIERS, WIN_NOTE } from '../../src/core/engine/weights.ts';
 import { AGENTS, agentById, type Agent } from '../../src/core/kb/agents.ts';
+import { fitOf } from '../../src/core/kb/effects.ts';
 import { abilityNames } from '../../src/core/kb/kits.ts';
 import { RULES, ruleWhy } from '../../src/core/kb/kitfit.ts';
 import { MAPS, POOL, parseNeeds } from '../../src/core/kb/maps.ts';
 import { MAP_WINS } from '../../src/core/kb/mapwins.ts';
 import { LINEUPS } from '../../src/core/kb/lineups.ts';
 import { PLAYED, PRO, proOverlap } from '../../src/core/kb/pro.ts';
-import { RADIANT } from '../../src/core/kb/ranked.ts';
+import { RADIANT, RANK_WINS } from '../../src/core/kb/ranked.ts';
 import { PAIRS } from '../../src/core/kb/synergy.ts';
 import { RANK_IDS, rankOf, type RankId } from '../../src/core/kb/ranks.ts';
 import { DIMS, DIM_INFO, ROLES, ROLE_IDS, type Role } from '../../src/core/kb/roles.ts';
@@ -143,7 +145,7 @@ function untrue(s: Situation, team: readonly string[], who: ExplainFor = {}): st
       const here = (a: Agent) => 1 - m.miss[a.index * D + DIMS.indexOf(d)]! > 1e-9;
       const bring = agents.filter(here);
       // a pro for a strength the comp has plenty of: the agents it names bring it
-      const verb = [STRONG[d].one, STRONG[d].many].find((v) => new RegExp(` ${v}[,.]`).test(line));
+      const verb = strongForms(d).find((v) => new RegExp(` ${v}[,.]`).test(line));
       const spread = line.startsWith(`Between them, the team has plenty of ${info.has}`) && /^[,.]/.test(line.slice(`Between them, the team has plenty of ${info.has}`.length));
       if (kind === 'pro' && (verb || spread)) {
         if (r.cover < 0.8 || r.need < 1) no(`${d} covers ${r.cover.toFixed(2)} at need ${r.need.toFixed(2)}`);
@@ -153,15 +155,25 @@ function untrue(s: Situation, team: readonly string[], who: ExplainFor = {}): st
       if (kind !== 'con') continue;
       // a gap: nobody brings it, or only these do (all of them named, by ability), or the comp is light on it
       const nobody = line.startsWith(`Nobody brings ${info.lacks}`) && /^[,]/.test(line.slice(`Nobody brings ${info.lacks}`.length));
-      const lead = `${info.has.charAt(0).toUpperCase()}${info.has.slice(1)} ${info.few ? 'come' : 'comes'} only from `;
-      const little = new RegExp(`^(.+) bring only a (?:little|few) ${info.has}(?:\\. [A-Z][^.]*? needs more)?, so `).exec(line)?.[1];
-      const only = line.startsWith(lead) ? line.slice(lead.length).split(/(?:, so |\. [A-Z][^.]*? needs more, so )/)[0]! : little ?? '';
-      const thinOnly = !!only && !little && (line.includes(', so once ') || line.includes(' goes down, ') || line.includes(' go down, '));
+      // (every way a con names the sources: "Only Sova’s Recon Bolt brings information.", "… rests on …", and the rest)
+      const sources = sourcesIn(line, d);
+      const little = sources?.kind === 'little' ? sources.list : undefined;
+      const only = sources?.list ?? '';
+      const thinOnly = sources?.kind === 'thin';
+      // a gap only ultimates fill (an ultimate still brings some, in the rounds it's ready): nobody
+      // brings it otherwise, and the ultimate each one named has does it
+      const ultOnly = !!only && !little && /, (?:an ultimate|ultimates) most rounds don’t have$/.test(only);
+      if (ultOnly) {
+        if (r.cover >= 0.55 || r.need < 0.9) no(`${d} covers ${r.cover.toFixed(2)} at need ${r.need.toFixed(2)}`);
+        if (bring.length) no(`${bring.map((a) => a.name).join(', ')} bring some ${d} besides an ultimate`);
+        for (const a of agents) if (only.includes(`${a.name}’s `) && fitOf(a.id, 'X', d) !== 'does') no(`${a.name}’s ultimate doesn't bring ${d}`);
+        if (!agents.some((a) => only.includes(`${a.name}’s `))) no(`names no one's ultimate for ${d}`);
+      }
       // the thinnest spot of a strength named by player (Operator play) names who plays it
       if (thinOnly && info.unnamed) for (const a of agents) if (only.includes(a.name) && !r.by.some((b) => b.id === a.id && b.value >= 0.6)) no(`${a.name} doesn't play ${d}`);
       if (little && only.split(/, | and /).length < 3) no(`only ${only} bring a little ${d}`);
       const light = line.startsWith(`The comp is light on ${info.lacks},`);
-      if (nobody || light || (only && !thinOnly)) {
+      if (nobody || light || (only && !thinOnly && !ultOnly)) {
         if (r.cover >= 0.55 || r.need < 0.9) no(`${d} covers ${r.cover.toFixed(2)} at need ${r.need.toFixed(2)}`);
         if (nobody && bring.length) no(`${bring.map((a) => a.name).join(', ')} bring some ${d}`);
         if ((light || only) && !bring.length) no(`nobody brings ${d}`);
@@ -180,7 +192,7 @@ function untrue(s: Situation, team: readonly string[], who: ExplainFor = {}): st
       }
       if (thinOnly && (r.cover >= 0.8 || r.need < 1)) no(`${d} covers ${r.cover.toFixed(2)}`);
       // the thinnest spot names everyone who brings some of it too: "only Sova’s Shock Bolt" is wrong
-      // with Phoenix’s Hot Hands in the comp (grading round 7)
+      // with Phoenix’s Hot Hands in the comp (graded review, pass 7)
       if (thinOnly && !info.unnamed && d !== 'duel' && bring.length <= 3) for (const a of agents) if (here(a) && !only.includes(`${a.name}’s`)) no(`${a.name} brings some ${d} too`);
       if (line.startsWith(`The comp is thinnest on ${info.lacks},`) && (r.cover >= 0.8 || r.need < 1)) no(`${d} covers ${r.cover.toFixed(2)}`);
     }
@@ -201,21 +213,32 @@ function untrue(s: Situation, team: readonly string[], who: ExplainFor = {}): st
     }
     if (line === `Pro teams play this comp on ${map?.name}.` && proOverlap(map!.id, team) !== 5) no('not a pro comp');
     if (line === `Four of these five are in a comp pro teams play on ${map?.name}.` && proOverlap(map!.id, team) !== 4) no(`${proOverlap(map!.id, team)} in common`);
-    // ranked win rates: the right way round, and the numbers the knowledge base has
-    const win = /win(?:s)? (more|fewer) ranked games than most agents \((.+?)\)/.exec(line);
+    // ranked win rates: the right way round, and the numbers the score counts at the rank
+    // ("Phoenix wins 52% of ranked games at Immortal and Clove 53% at Radiant, more than most agents.")
+    const win = /^(.+?) (?:also )?wins (\d+% of ranked games(?: at [A-Z][a-z]+)?)((?: and |, ).+?)?, (more|less) than most agents\b/.exec(line);
     if (win) {
-      const named = agents.filter((a) => line.split(' win')[0]!.includes(a.name));
-      if (!named.length) no('names nobody');
+      const rated = [`${win[1]} ${win[2]!.replace(' of ranked games', '')}`, ...(win[3] ?? '').replace(/^(?: and |, )/, '').split(/, | and /).filter(Boolean)];
+      const named = agents.filter((a) => rated.some((x) => x.startsWith(`${a.name} `)));
+      if (!named.length || named.length !== rated.length) no('names nobody, or someone who isn’t in the comp');
+      // a rate without a rank after it is at the first one's
+      const firstAt = / at [A-Z][a-z]+$/.exec(rated[0]!)?.[0] ?? '';
       for (const a of named) {
+        const said = rated.find((x) => x.startsWith(`${a.name} `))!.slice(a.name.length + 1);
+        const quoted = / at [A-Z][a-z]+$/.test(said) ? said : `${said}${firstAt}`;
         // Radiant's own rate, where that's the one quoted: against the average pick there
         const top = RADIANT[a.id];
-        if (top && win[2]!.includes(`${pct(top[1])} at Radiant`) && (named.length === 1 || win[2]!.includes(`${a.name} ${pct(top[1])} at Radiant`))) {
+        if (top && quoted === `${pct(top[1])} at Radiant`) {
           if (!s.party || s.party === 5) no(`a five-stack's answer quotes ${a.name}'s rate at Radiant`);
-          if (win[1] === 'more' ? top[1] <= RADIANT_MEAN : top[1] >= RADIANT_MEAN) no(`${a.name} wins ${top[1]}% at Radiant`);
+          if (win[4] === 'more' ? top[1] <= RADIANT_MEAN : top[1] >= RADIANT_MEAN) no(`${a.name} wins ${top[1]}% at Radiant`);
           continue;
         }
-        if (win[1] === 'more' ? a.win <= 50 : a.win >= 50) no(`${a.name} wins ${a.win}%`);
-        if (!win[2]!.includes(pct(a.win))) no(`${a.name}'s rate is ${pct(a.win)}`);
+        // otherwise the rate as the rank's answers count it, named for the rank only where op.gg's table
+        // for that rank has the agent: elsewhere, and at Radiant, it's their rate across all ranks, the
+        // one their page and Help show
+        const listed = s.rank !== 'radiant' && !!RANK_WINS[s.rank].agents[a.id];
+        const rate = listed ? rankWinAt(a, s.rank) : a.win, at = listed ? ` at ${rankOf(s.rank).name}` : '';
+        if (win[4] === 'more' ? rate <= 50 : rate >= 50) no(`${a.name} wins ${rate.toFixed(1)}%${at}`);
+        if (quoted !== `${pct(rate)}${at}`) no(`${a.name}'s rate is ${pct(rate)}${at}`);
       }
     }
     // the practice a kit takes, as the score counts it
@@ -268,7 +291,7 @@ test('what the explanations say is true, for random teams and for the best comps
 });
 
 test('what a comp says about how many of a role pro teams run matches the lineups they played', () => {
-  // (grading round 3: "pro teams on Corrode rarely run a sentinel", where 7 of the 14 lineups there ran one)
+  // (graded review, pass 3: "pro teams on Corrode rarely run a sentinel", where 7 of the 14 lineups there ran one)
   const r = random(20261112);
   const ids = AGENTS.map((a) => a.id);
   const problems: string[] = [];
@@ -299,7 +322,7 @@ test('what a comp says about how many of a role pro teams run matches the lineup
 });
 
 test('a con that says a pick struggles here says how to play around it', () => {
-  // (grading round 3: "Sage’s Barrier Orb can’t wall off Breeze’s wide ways in" on a comp that plays
+  // (graded review, pass 3: "Sage’s Barrier Orb can’t wall off Breeze’s wide ways in" on a comp that plays
   // Sage, and "pros rarely run a sentinel" with nothing on what to do about it)
   const r = random(20261113);
   const problems: string[] = [];
@@ -324,7 +347,7 @@ test('a con that says a pick struggles here says how to play around it', () => {
 });
 
 test('a pro never credits an agent with what a con says the map takes from their kit', () => {
-  // (grading round 3: "Jett and Phoenix win plenty of fights alone, and Breeze rewards that" next to
+  // (graded review, pass 3: "Jett and Phoenix win plenty of fights alone, and Breeze rewards that" next to
   // "Breeze’s long sightlines keep most fights out of their reach" for Phoenix's kit)
   const r = random(20261114);
   const problems: string[] = [];
@@ -338,8 +361,8 @@ test('a pro never credits an agent with what a con says the map takes from their
       for (const rule of costs.filter((x) => team.includes(x.agent) && e.cons.some((line) => line.includes(ruleWhy(x, map.id))))) {
         seen++;
         const name = agentById(rule.agent)!.name;
-        for (const d of Object.keys(rule.bumps).filter((x) => rule.bumps[x as keyof typeof rule.bumps]! < 0) as (keyof typeof STRONG)[]) {
-          const says = [STRONG[d].one, STRONG[d].many, `brings ${DIM_INFO[d].has}`];
+        for (const d of Object.keys(rule.bumps).filter((x) => rule.bumps[x as keyof typeof rule.bumps]! < 0) as (keyof typeof DIM_INFO)[]) {
+          const says = [...strongForms(d), `brings ${DIM_INFO[d].has}`];
           for (const line of e.pros) if (line.includes(name) && says.some((w) => line.includes(w))) problems.push(`${map.name} ${side} at ${rank}: "${line}" with "${ruleWhy(rule, map.id)}"`);
         }
       }
@@ -350,7 +373,7 @@ test('a pro never credits an agent with what a con says the map takes from their
 });
 
 test('a pro about ranked win rates names nobody who loses most of their games on that map', () => {
-  // (grading round 3: "Phoenix and Sage win more ranked games than most agents (Phoenix 52%…)" on
+  // (graded review, pass 3: "Phoenix and Sage win more ranked games than most agents (Phoenix 52%…)" on
   // Corrode, where Phoenix's team won 47.5% of its games)
   const r = random(20261115);
   const problems: string[] = [];
@@ -358,12 +381,12 @@ test('a pro about ranked win rates names nobody who loses most of their games on
   for (const map of MAPS.filter((x) => MAP_WINS[x.id])) for (const side of ['attack', 'defense'] as const) for (const rank of ['silver', 'gold', 'platinum', 'diamond'] as const) {
     const m = modelFor({ map: map.id, side, rank, sites: [] });
     for (const a of AGENTS.filter((x) => !x.estimate)) {
-      const line = explainTeam(m, [a.id, ...r.some(AGENTS.map((x) => x.id).filter((x) => x !== a.id), 4)]).pros.find((x) => x.includes('more ranked games than most agents'));
+      const line = explainTeam(m, [a.id, ...r.some(AGENTS.map((x) => x.id).filter((x) => x !== a.id), 4)]).pros.find((x) => x.includes(' of ranked games') && x.includes(', more than most agents'));
       if (!line) continue;
       seen++;
       for (const b of AGENTS) {
         const [won, games] = MAP_WINS[map.id]!.agents[b.id] ?? [50, 0];
-        if (new RegExp(`\\b${b.name}\\b`).test(line.slice(0, line.indexOf(' win'))) && won < 50 && games >= WIN_NOTE.games) problems.push(`${map.name} ${side} at ${rank}: "${line}" (${b.name} ${won}% over ${games} games there)`);
+        if (new RegExp(`\\b${b.name}\\b`).test(line.slice(0, line.indexOf(', more than'))) && won < 50 && games >= WIN_NOTE.games) problems.push(`${map.name} ${side} at ${rank}: "${line}" (${b.name} ${won}% over ${games} games there)`);
       }
     }
   }
@@ -389,7 +412,7 @@ test('a pair that counts on one side reads as one sentence when both sides are a
 });
 
 test('advice for one side is given only on that side', () => {
-  // (grading round 3: defense cons ending "cross open ground fast and together, or take a covered way in")
+  // (graded review, pass 3: defense cons ending "cross open ground fast and together, or take a covered way in")
   const r = random(20261114);
   const ids = AGENTS.map((a) => a.id);
   const only = { attack: /cross open ground fast|a covered way in|before (?:planting|the plant)|commit to a site early|hold the planted Spike/i, defense: /when you retake|stop the plant|rotate early on information|before a retake/i };
@@ -403,7 +426,7 @@ test('advice for one side is given only on that side', () => {
 });
 
 test('a duo or trio hears a pro about each of its own agents', () => {
-  // (grading round 3: a trio of Jett, Astra and Killjoy whose pros were about Jett and the locked Reyna and Skye)
+  // (graded review, pass 3: a trio of Jett, Astra and Killjoy whose pros were about Jett and the locked Reyna and Skye)
   const r = random(20261115);
   const problems: string[] = [];
   for (let n = 0; n < 120; n++) {
@@ -423,7 +446,7 @@ test('a duo or trio hears a pro about each of its own agents', () => {
 });
 
 test('a duo or trio that plays both controllers itself hears that two need a team that plays together only where a five-stack would', () => {
-  // (grading round 4: a trio of Sova, Viper and Omen on Icebox at Ascendant heard that most teams
+  // (graded review, pass 4: a trio of Sova, Viper and Omen on Icebox at Ascendant heard that most teams
   // there don't play their smokes together; the party smokes together as well as a five-stack at
   // its rank, so it hears what that five-stack would)
   const problems: string[] = [];
@@ -442,7 +465,7 @@ test('a duo or trio that plays both controllers itself hears that two need a tea
 });
 
 test('a card warns about a role nobody plays only where the score pays for having none', () => {
-  // (grading round 4: solo players on Haven and Summit heard "if no one picks an initiator" on teams
+  // (graded review, pass 4: solo players on Haven and Summit heard "if no one picks an initiator" on teams
   // the engine ranks best, since random teams without one win as often as any, RANKED_ROLE)
   const problems: string[] = [];
   let seen = 0;
@@ -463,7 +486,7 @@ test('a card warns about a role nobody plays only where the score pays for havin
 });
 
 test('an agent your party won\u2019t play, picked by a random teammate, comes with a word on why', () => {
-  // (grading round 3: a solo player asked for no Neon and found Neon among the likely teammates)
+  // (graded review, pass 3: a solo player asked for no Neon and found Neon among the likely teammates)
   const problems: string[] = [];
   let seen = 0;
   for (const map of POOL) for (const party of [1, 2, 3] as const) {
@@ -501,7 +524,7 @@ test('the tiers on screen come from the fit the rankings sort by', () => {
 
 test('below Platinum, every hard kit in a comp gets the practice warning, one the player must play too', () => {
   // a must-play is the player's call, but they still hear that the rank gets only part of the kit
-  // (claims hush-hard and neon-silver; grading round 3, Hush at Silver with no word on it)
+  // (claims hush-hard and neon-silver; graded review, pass 3, Hush at Silver with no word on it)
   const problems: string[] = [];
   const hard = AGENTS.filter((a) => kitShare(a, 0) < KIT_NOTE.hard && !a.estimate);
   for (const rank of ['iron', 'silver', 'gold'] as const) for (const map of POOL) for (const a of hard) {
@@ -518,7 +541,7 @@ test('below Platinum, every hard kit in a comp gets the practice warning, one th
 
 test('a defense isn’t told an extra sentinel makes it slow to take space, and below Platinum isn’t told off for a second one', () => {
   // taking space is the attack's job; on defense two sentinels lock sites down, which wins rounds
-  // from Silver to Gold (claim gold-sentinel; grading round 5, Corrode at Gold and Platinum)
+  // from Silver to Gold (claim gold-sentinel; graded review, pass 5, Corrode at Gold and Platinum)
   const problems: string[] = [];
   for (const rank of ['silver', 'gold', 'platinum', 'diamond'] as const) for (const m of MAPS) for (const side of ['attack', 'defense'] as const) {
     const s: Situation = { map: m.id, side, rank, sites: [] };
@@ -535,7 +558,7 @@ test('a defense isn’t told an extra sentinel makes it slow to take space, and 
 
 test('a comp hears it’s short of Operator play only on maps that reward long angles, and from Gold up', () => {
   // on tight maps such as Lotus, and from Iron to Silver where rifles and trades decide fights, the
-  // Operator isn't what a comp is missing (grading round 5: eight answers)
+  // Operator isn't what a comp is missing (graded review, pass 5: eight answers)
   const problems: string[] = [];
   for (const rank of ['iron', 'bronze', 'silver', 'gold', 'platinum'] as const) for (const m of MAPS) for (const side of ['attack', 'defense'] as const) {
     const s: Situation = { map: m.id, side, rank, sites: [] };
@@ -549,7 +572,7 @@ test('a comp hears it’s short of Operator play only on maps that reward long a
 });
 
 test('below Platinum, no reason on a card sells fakes or splitting the defenders', () => {
-  // the research keeps plans simple below Platinum (PLAY_RANK.from[3]); grading round 5, #93: Hush's
+  // the research keeps plans simple below Platinum (PLAY_RANK.from[3]); graded review, pass 5, #93: Hush's
   // door switch "to fake a hit, split the defenders" for a Silver trio
   const problems: string[] = [];
   const words = /\bfak(?:e|es|ing)\b|split the defenders/i;
@@ -566,11 +589,17 @@ test('below Platinum, no reason on a card sells fakes or splitting the defenders
 test('from Ascendant up, a duo or trio that plays both controllers picks them as a team that plays together would', () => {
   // the party times its own smokes, so its two controllers are a pair pro teams run on the map, or
   // one of the pairs the three best five-stacks with two controllers run there, not the ones random
-  // solo players do best with (grading round 5, #53: Omen with Clove on Abyss at Immortal, where pro teams pair
-  // Astra or Harbor with Omen)
+  // solo players do best with (graded review, pass 5, #53: Omen with Clove on Abyss at Immortal, where pro teams pair
+  // Astra or Harbor with Omen). A five-stack's two-controller comps within a point of its best count
+  // as its pairs too, since they're level on the fit shown. Viper's ranked rate fell after Breeze and
+  // Split left the pool (op.gg: 47.9% on patch 13.08, 47.0% on 13.10, read 20 November 2026), so her
+  // comp with Omen on Abyss attack at Ascendant went from a five-stack's 2nd to its 4th, 0.6 behind
+  // the best, while the trio kept Viper and Omen. dodge.gg's 2026 Abyss guide names both as Abyss
+  // controllers, and Viper is the controller random players pick least, so it isn't a solo pair.
   const problems: string[] = [];
   for (const map of ['abyss', 'bind', 'split', 'icebox', 'breeze', 'lotus', 'corrode'] as const) for (const rank of ['ascendant', 'immortal', 'radiant'] as const) for (const side of ['attack', 'defense'] as const) {
-    const five = solve({ ...newQuery(rank, true), map, side, roles: { controller: 2 } }, { map, side, rank, sites: [] }, 3).comps.flatMap((c) => c.team);
+    const comps = solve({ ...newQuery(rank, true), map, side, roles: { controller: 2 } }, { map, side, rank, sites: [] }, 10).comps;
+    const five = comps.filter((c, i) => i < 3 || c.fit >= comps[0]!.fit - 1).flatMap((c) => c.team);
     const ok = (id: string) => (PRO[map]!.picks[id] ?? 0) >= 20 || five.includes(id);
     for (const party of [2, 3] as const) {
       const s: Situation = { map, side, rank, sites: [], party };

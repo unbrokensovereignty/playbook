@@ -39,6 +39,10 @@ test('every map plans in the Planner, with comps, pros and cons', async ({ page,
     await expect(page.locator('.answers[aria-busy=true], .working')).toHaveCount(0, { timeout: 30_000 });
     const first = page.locator('.comps > li').first();
     await expect(first, `${m.name}: a comp`).toBeVisible();
+    // the first comp opens on its pros and cons
+    await expect(first.getByRole('heading', { name: 'Pros', exact: true }), `${m.name}: pros`).toBeVisible();
+    await expect(first.getByRole('heading', { name: 'Cons', exact: true }), `${m.name}: cons`).toBeVisible();
+    await expect(first.locator('.pros-cons .reasons li').first(), `${m.name}: a reason`).toBeVisible();
   }
   expect(errors).toEqual([]);
 });

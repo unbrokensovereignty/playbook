@@ -4,6 +4,7 @@
  * Built-in themes and your own themes go through the same generator, so they behave the same.
  */
 import { clamp, isRecord } from './util.ts';
+import { cut } from './text.ts';
 
 // ---------------------------------------------------------------- color math
 
@@ -169,9 +170,9 @@ export function generateTheme(p: ThemePicks, accentOverride = ''): GeneratedThem
   const onSurfaces = [surface, card, bg, bg2];
   const text = fix('text', inkBase, onSurfaces, 7);
   // a high-contrast theme (near black and white) gets lines and shading strong enough to see
-  const hc = contrast(text, surface) >= 18;
+  const hc = contrast(text, surface) >= 17;
   // the faintest text still reads at 4.5:1 (WCAG AA), even on the shaded panels
-  const shade = mix(surface, text, hc ? 0.1 : 0.045), shade2 = mix(surface, text, hc ? 0.24 : 0.09);
+  const shade = mix(surface, text, hc ? 0.2 : 0.045), shade2 = mix(surface, text, hc ? 0.32 : 0.09);
   const accent = fix('accent', accentPick, [surface, card], 3);
   const accentSoft = mix(surface, accent, dark ? 0.22 : 0.14);
   const text2 = fix('text2', mix(text, surface, 0.3), [surface, card, bg, bg2, shade2, accentSoft], 4.5);
@@ -184,6 +185,10 @@ export function generateTheme(p: ThemePicks, accentOverride = ''): GeneratedThem
     'surface-3': shade2,
     line: mix(surface, text, hc ? 0.4 : 0.14),
     'line-strong': mix(surface, text, hc ? 0.6 : 0.26),
+    // a field's edge is all that sets it apart from the panel, so it reaches 3:1 against both, as WCAG asks of a control's edge; not a nudge the theme reports
+    'field-line': readable(mix(surface, text, hc ? 0.6 : 0.26), [surface, card], 3).color,
+    // a switch's knob stands out from that edge-coloured track: light on light themes, near white on dark ones
+    knob: dark ? text : card,
     text, text2, text3,
     accent, 'accent-text': accentText,
     'on-accent': fix('on-accent', onAccent, [accent], 4.5),
@@ -215,7 +220,7 @@ export function sanitizeTheme(x: unknown): ThemePicks | null {
   if (!isRecord(x)) return null;
   const base: Base = x.base === 'dark' ? 'dark' : 'light';
   if (!isHex(x.bg) || !isHex(x.surface) || !isHex(x.card) || !isHex(x.accent)) return null;
-  const name = typeof x.name === 'string' ? x.name.trim().slice(0, 40) : '';
+  const name = typeof x.name === 'string' ? cut(x.name.trim(), 40) : '';
   const id = typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id) ? x.id : '';
   const h = (v: string) => toHex(parseHex(v)!);
   return { id, name: name || 'My theme', base, bg: h(x.bg), bg2: isHex(x.bg2) ? h(x.bg2) : '', surface: h(x.surface), card: h(x.card), accent: h(x.accent) };

@@ -7,13 +7,15 @@ import { PageHead } from '../shell.tsx';
 import { Question } from '../planner/question.tsx';
 import { Answers } from '../planner/answers.tsx';
 import { answer, currentQuestion, question, run } from '../planner/store.ts';
+import { data } from '../state.ts';
 import type { PageProps } from './index.ts';
 
 export function PlannerPage(_p: PageProps) {
   const q = question.value ?? currentQuestion();
-  // answer on arrival when there's no answer for this question yet
+  // answer on arrival when there's no answer for this question yet, or it kept another number of comps than Settings now asks for
   useEffect(() => {
-    if (!run.peek() || JSON.stringify(run.peek()!.query) !== JSON.stringify(q)) void answer();
+    const was = run.peek();
+    if (!was || JSON.stringify(was.query) !== JSON.stringify(q) || was.keep !== data().settings().resultCount) void answer();
   }, []);
   return (
     <>

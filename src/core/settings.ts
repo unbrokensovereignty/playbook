@@ -20,7 +20,7 @@ export type SettingDef =
   | (Base & { type: 'comfort'; def: Readonly<Record<string, Comfort>>; of: 'myAgents' });
 
 export const SECTIONS: readonly { id: SectionId; title: string; blurb: string }[] = [
-  { id: 'you', title: 'You', blurb: 'How you play. The Planner and Rankings start from here.' },
+  { id: 'you', title: 'You', blurb: 'Your rank, how you queue and the agents you play.' },
   { id: 'planner', title: 'Planner', blurb: 'What the Planner starts with and how much it shows.' },
   { id: 'appearance', title: 'Appearance', blurb: 'Themes, colors, sizes and motion.' },
   { id: 'sound', title: 'Sound', blurb: 'Sound effects and their volume.' },
@@ -37,7 +37,7 @@ export const SETTINGS = {
   // planner
   includeNew: S({ section: 'planner', type: 'bool', def: true, label: 'Include new agents', help: 'New agents have little play behind them yet, so their scores are early estimates.', keywords: 'unreleased estimates' }),
   resultCount: S({ section: 'planner', type: 'number', def: 10, min: 3, max: 30, unit: 'comps', label: 'Comps to show', keywords: 'results length' }),
-  showNumbers: S({ section: 'planner', type: 'bool', def: true, label: 'Show fit scores as numbers', help: 'When this is off, only the bars show.' }),
+  showNumbers: S({ section: 'planner', type: 'bool', def: true, label: 'Show fit scores as numbers', help: 'When this is off, each fit shows as its tier and bar, and Copy and Print name the tier.' }),
   // appearance
   themeMode: S({ section: 'appearance', type: 'choice', def: 'system', options: [['system', 'Match my computer'], ['light', 'Always light'], ['dark', 'Always dark']], label: 'Light or dark' }),
   themeLight: S({ section: 'appearance', type: 'text', def: 'paper', label: 'Light theme' }),
@@ -47,10 +47,10 @@ export const SETTINGS = {
   motion: S({ section: 'appearance', type: 'choice', def: 'system', options: [['system', 'Match my computer'], ['full', 'Full'], ['reduced', 'Reduced'], ['off', 'Off']], label: 'Motion', help: 'Reduced keeps fades only.', keywords: 'animation' }),
   // sound
   sound: S({ section: 'sound', type: 'bool', def: true, label: 'Sound effects' }),
-  soundSet: S({ section: 'sound', type: 'choice', def: 'desk', options: [['desk', 'Desk (paper and wood)'], ['chimes', 'Chimes (small bells)'], ['kalimba', 'Kalimba (plucked tines)']], label: 'Sound set' }),
+  soundSet: S({ section: 'sound', type: 'choice', def: 'clarity', options: [['clarity', 'Clarity (soft tones)'], ['felt', 'Felt (piano)'], ['beacon', 'Beacon (alert tones)']], label: 'Sound set' }),
   volMaster: S({ section: 'sound', type: 'number', def: 60, min: 0, max: 100, unit: '%', percent: true, label: 'Volume' }),
   volUi: S({ section: 'sound', type: 'number', def: 50, min: 0, max: 100, unit: '%', percent: true, label: 'Clicks and pages' }),
-  volResults: S({ section: 'sound', type: 'number', def: 70, min: 0, max: 100, unit: '%', percent: true, label: 'Results', help: 'The note when a plan is ready or saved.' }),
+  volResults: S({ section: 'sound', type: 'number', def: 70, min: 0, max: 100, unit: '%', percent: true, label: 'Results', help: 'The sound when a plan is ready or something is saved.' }),
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

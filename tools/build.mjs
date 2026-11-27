@@ -22,10 +22,14 @@ const outFile = outArg >= 0 ? resolve(args[outArg + 1]) : resolve(root, 'dist', 
 /** The largest file we're willing to ship. Fonts and the game art are most of it. */
 const SIZE_BUDGET = 3.5 * 1024 * 1024;
 
+/** The kinds of file an `assets:` folder can hold, by extension. */
+const ASSET_TYPES = { '.webp': 'image/webp', '.mp3': 'audio/mpeg', '.wav': 'audio/wav' };
+
 /**
  * `import art from 'assets:agents'` gives every image in assets/agents/ as a data URL, by file
  * name without its extension ({ jett: 'data:image/webp;base64,…' }). An image that's missing just
- * isn't there; the app shows the name instead.
+ * isn't there; the app shows the name instead. The recorded sounds come the same way, from
+ * assets/sounds/<pack>/.
  */
 const assetsPlugin = {
   name: 'assets',
@@ -33,13 +37,32 @@ const assetsPlugin = {
     b.onResolve({ filter: /^assets:/ }, (a) => ({ path: a.path.slice('assets:'.length), namespace: 'assets' }));
     b.onLoad({ filter: /.*/, namespace: 'assets' }, async (a) => {
       const dir = resolve(root, 'assets', a.path);
-      const files = (await readdir(dir).catch(() => [])).filter((f) => f.endsWith('.webp')).sort();
+      const typeOf = (f) => ASSET_TYPES[f.slice(f.lastIndexOf('.'))];
+      const files = (await readdir(dir).catch(() => [])).filter(typeOf).sort();
       const out = {};
-      for (const f of files) out[f.replace(/\.webp$/, '')] = `data:image/webp;base64,${(await readFile(resolve(dir, f))).toString('base64')}`;
+      for (const f of files) out[f.slice(0, f.lastIndexOf('.'))] = `data:${typeOf(f)};base64,${(await readFile(resolve(dir, f))).toString('base64')}`;
       return { contents: `export default ${JSON.stringify(out)};`, loader: 'js', watchDirs: [dir] };
     });
   },
 };
+
+// the engine's worker (src/worker/engine.ts), built first and handed to the app as text, so the
+// one file can start it with no server: the app makes a blob URL of it
+const worker = await build({
+  entryPoints: [resolve(root, 'src/worker/engine.ts')],
+  bundle: true,
+  write: false,
+  format: 'iife',
+  platform: 'browser',
+  target: ['chrome111', 'edge111', 'firefox115', 'safari16.4'],
+  minify: !dev,
+  sourcemap: dev ? 'inline' : false,
+  legalComments: 'none',
+  loader: { '.txt': 'text' },
+  logLevel: 'warning',
+});
+const workerJs = worker.outputFiles[0]?.text ?? '';
+if (!workerJs) throw new Error('The build produced no engine worker.');
 
 const result = await build({
   entryPoints: [resolve(root, 'src/main.tsx')],
@@ -55,7 +78,7 @@ const result = await build({
   jsx: 'automatic',
   jsxImportSource: 'preact',
   loader: { '.woff2': 'dataurl', '.svg': 'text', '.txt': 'text' },
-  define: { __APP_VERSION__: JSON.stringify(version), __DEV__: String(dev), __DB_NAME__: JSON.stringify(preview ? 'playbook-preview' : 'playbook') },
+  define: { __APP_VERSION__: JSON.stringify(version), __DEV__: String(dev), __ENGINE_WORKER__: JSON.stringify(workerJs), __DB_NAME__: JSON.stringify(preview ? 'playbook-preview' : 'playbook') },
   plugins: [assetsPlugin],
   logLevel: 'warning',
 });

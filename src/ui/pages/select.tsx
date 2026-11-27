@@ -5,24 +5,27 @@
  * player (core/engine/select.ts). After the game, log how it went in two clicks.
  */
 import { signal } from '@preact/signals';
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { PageHead } from '../shell.tsx';
 import { AgentIcon, RoleIcon } from '../art.tsx';
 import { Button, IconButton, Select } from '../components/controls.tsx';
 import { Icon } from '../icons.tsx';
 import { Fit } from '../planner/comp.tsx';
 import { openPlanner, question } from '../planner/store.ts';
-import { data, go, safely, toast, useSettings } from '../state.ts';
+import { data, go, overlayOpen, reportError, safely, toast, useSettings } from '../state.ts';
+import { tourState } from '../tours/now.ts';
 import { play } from '../sound.ts';
 import { AGENTS_BY_NAME, agentById } from '../../core/kb/agents.ts';
 import { MAPS, POOL, mapById } from '../../core/kb/maps.ts';
 import { RANKS, type RankId } from '../../core/kb/ranks.ts';
 import { DIM_INFO, ROLES, roleOf, type Role } from '../../core/kb/roles.ts';
-import { freeAgents, pickNow, selectQuery, TEAM, type SelectAsk } from '../../core/engine/select.ts';
+import { freeAgents, selectQuery, TEAM, type SelectAnswer, type SelectAsk } from '../../core/engine/select.ts';
+import { noneOf } from '../../core/engine/explain.ts';
+import { makeEngine } from '../engine.ts';
 import { youOf } from '../../core/settings.ts';
 import { GAME_RESULTS, type GameResult } from '../../core/saved.ts';
 import { fold, listJoin } from '../../core/text.ts';
-import { articleOf, countWord } from '../../core/util.ts';
+import { articleOf, capitalize, countWord } from '../../core/util.ts';
 import type { PageProps } from './index.ts';
 
 /** What's on the page, kept while you look at other pages during the same agent select. */
@@ -44,11 +47,11 @@ function matches(text: string, free: readonly string[]): string[] {
 
 function lock(id: string) {
   if (locked.value.includes(id) || locked.value.length >= TEAM - 1) return;
-  play('tick');
+  play('pick');
   locked.value = [...locked.value, id];
 }
 function unlock(id: string) {
-  play('tick');
+  play('unpick');
   locked.value = locked.value.filter((x) => x !== id);
 }
 
@@ -59,10 +62,15 @@ function Team({ newAgents }: { newAgents: boolean }) {
   const free = freeAgents(locked.value, newAgents).map((a) => a.id);
   const full = locked.value.length >= TEAM - 1;
   const found = full ? [] : matches(text, free);
+  // the box has focus when the page opens, however it was reached, as Help → Keyboard says. The
+  // autofocus attribute only works for the page a tab opened on, and even there the welcome dialog
+  // can open first. A tour's card takes the keys instead, and a dialog already open keeps them.
+  useEffect(() => { if (!overlayOpen() && !tourState.peek()) input.current?.focus({ preventScroll: true }); }, []);
   const onKey = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && found[0]) { e.preventDefault(); lock(found[0]); setText(''); }
     else if (e.key === 'Escape' && text) { e.preventDefault(); e.stopPropagation(); setText(''); }
-    else if (e.key === 'Backspace' && !text && locked.value.length) { e.preventDefault(); unlock(locked.value.at(-1)!); }
+    // a held Backspace clearing what you typed stops at the empty box: its repeats don't go on to take your teammates out
+    else if (e.key === 'Backspace' && !text && locked.value.length) { e.preventDefault(); if (!e.repeat) unlock(locked.value.at(-1)!); }
   };
   return (
     <section class="panel stack select-team" data-tour="select-team">
@@ -74,14 +82,14 @@ function Team({ newAgents }: { newAgents: boolean }) {
             <li key={id} class="select-slot">
               <AgentIcon id={id} size={44} />
               <span class="grow">{nameOf(id)}</span>
-              <IconButton icon="x" size="sm" label={`Remove ${nameOf(id)}`} onClick={() => unlock(id)} />
+              <IconButton icon="x" size="sm" label={`Remove ${nameOf(id)}`} sound={false} onClick={() => unlock(id)} />
             </li>
           ) : <li key={`empty-${i}`} class="select-slot empty"><span class="muted small">{i === locked.value.length ? 'Next teammate' : 'Teammate'}</span></li>;
         })}
       </ol>
       <div class="stack" style={{ gap: '6px' }}>
         <label class="small" for="select-type">Type an agent and press Enter</label>
-        <input id="select-type" ref={input} class="input" value={text} autoFocus autoComplete="off" spellcheck={false}
+        <input id="select-type" ref={input} class="input" value={text} autoComplete="off" spellcheck={false}
           placeholder={full ? 'Your team is in' : 'Omen, Jett, Sova…'} aria-describedby="select-type-hint"
           onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} onKeyDown={onKey} />
         <p id="select-type-hint" class="small muted" aria-live="polite">
@@ -112,18 +120,44 @@ function Team({ newAgents }: { newAgents: boolean }) {
   );
 }
 
+/** Agent select's own worker, so working out a pick never holds up the page. */
+const pickEngine = makeEngine();
+let lastPick: { key: string; a: SelectAnswer } | null = null;
+
 /** The agent to lock in, why, and what the team still needs; then logging the game. */
 function Pick({ ask, mine }: { ask: SelectAsk; mine: readonly string[] }) {
-  const a = useMemo(() => pickNow(ask), [ask.map, ask.rank, ask.locked.join(), ask.mine.join(), JSON.stringify(ask.comfort), ask.newAgents]);
+  // worked out beside the page, so the page draws and answers clicks while it thinks. Only the pick for
+  // this question shows: an older one could name the agent a teammate just locked in, and logging the
+  // game with it would put that agent on the team twice. A pick worked out before for the same question
+  // shows at once (coming back to the page, say)
+  const key = JSON.stringify([ask.map, ask.rank, ask.locked, ask.mine, ask.comfort, ask.newAgents]);
+  const [got, setGot] = useState<{ key: string; a: SelectAnswer } | null>(() => (lastPick?.key === key ? lastPick : null));
+  useEffect(() => {
+    let live = true;
+    // a pick still being worked out for the team as it was is let go of
+    pickEngine.cancel();
+    void pickEngine.run('pickNow', ask).then((x) => { lastPick = { key, a: x }; if (live) setGot(lastPick); }, (e: Error) => { if (live && e.message !== 'stopped') reportError(e); });
+    return () => { live = false; };
+  }, [key]);
+  const a = got?.key === key ? got.a : lastPick?.key === key ? lastPick.a : null;
   const [played, setPlayed] = useState<string | null>(null);
+  if (!a) return <section class="panel"><p class="row muted"><span class="spinner" aria-hidden="true" />Finding your pick…</p></section>;
   if (!a.pick) return <section class="panel"><p>Every agent is taken.</p></section>;
   const pick = a.pick, name = nameOf(pick.id);
   const you = played && !locked.value.includes(played) ? played : pick.id;
-  const brings = a.brings.length ? `${name} brings ${listJoin(a.brings.map((d) => DIM_INFO[d].has))}, what this team needs most here.` : `${name} fits this team best here.`;
+  const one = a.brings.length === 1 ? a.brings[0]! : undefined;
+  const brings = a.brings.length
+    ? `This team needs ${listJoin(a.brings.map((d) => DIM_INFO[d].has))} most here, and ${name} brings ${one ? (DIM_INFO[one].few ? 'them' : 'it') : a.brings.length === 2 ? 'both' : 'each of them'}.`
+    : `${name} fits this team best here.`;
+  // what a missing role costs, in the words the Planner's cons use for it
+  const none = a.lacks.map((r) => noneOf(r));
   const rest = a.toPick
     ? a.askFor ? `Ask ${a.toPick === 1 ? 'the last player' : `the other ${countWord(a.toPick)}`} for ${articleOf(roleWord(a.askFor))} ${roleWord(a.askFor)}.` : ''
-    : a.lacks.length ? `The team still has no ${listJoin(a.lacks.map(roleWord), 'or')}: play around it together.` : 'That makes a team with every role.';
+    : none.length === 1 ? `The team still has no ${roleWord(a.lacks[0]!)}, so ${none[0]}.`
+    : none.length ? `The team still has no ${listJoin(a.lacks.map(roleWord), 'or')}. ${capitalize(`${none.slice(0, -1).join(', ')}, and ${none.at(-1)}`)}.` : 'That makes a team with every role.';
   const log = (result: GameResult) => safely(() => {
+    // (never a team with an agent on it twice: the pick shown is always a free one, and so is the one you played)
+    if (locked.value.includes(you)) return;
     data().addGame({ map: ask.map, agent: you, team: [you, ...locked.value], result, note: '' });
     locked.value = [];
     setPlayed(null);
@@ -158,7 +192,7 @@ function Pick({ ask, mine }: { ask: SelectAsk; mine: readonly string[] }) {
         )}
         <div class="row wrap">
           <Button kind="soft" icon="planner" onClick={() => openPlanner(selectQuery(ask, a.fromMine))}>Open in the Planner</Button>
-          <Button kind="quiet" icon="refresh" disabled={!locked.value.length} onClick={() => { play('tick'); locked.value = []; setPlayed(null); }}>New game</Button>
+          <Button kind="quiet" icon="refresh" disabled={!locked.value.length} onClick={() => { locked.value = []; setPlayed(null); }}>New game</Button>
         </div>
       </section>
       <section class="panel stack" data-tour="select-log">

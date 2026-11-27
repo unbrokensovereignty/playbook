@@ -45,7 +45,7 @@ function MapGrid() {
             {maps.map((m) => (
               <button type="button" key={m.id} class="map-tile" onClick={() => { play('page'); go('maps', m.id); }}>
                 <MapThumb id={m.id} />
-                <span class="map-tile-text"><b>{m.name}</b><small>{m.about}</small></span>
+                <span class="map-tile-text"><b>{m.name}</b><small>{plural(m.sites.length, 'site')}: {listJoin(m.sites.map((s) => s.id))}</small></span>
               </button>
             ))}
           </div>
@@ -85,7 +85,6 @@ function Pro({ m }: { m: MapInfo }) {
   );
 }
 
-/** How open the map is, its mechanics, and the agents whose kits make the most of them. */
 /** What a site asks of each side beyond the rest of the map: "Attack: flashes and utility to clear corners. Defense: …". */
 function wantsLine(m: MapInfo, site: MapInfo['sites'][number]): string {
   const w = siteWants(m, site);
@@ -94,6 +93,7 @@ function wantsLine(m: MapInfo, site: MapInfo['sites'][number]): string {
   return [w.attack.length ? `Attack here needs ${words(w.attack)}.` : '', w.defense.length ? `Defense needs ${words(w.defense)}.` : ''].filter(Boolean).join(' ');
 }
 
+/** How open the map is, its mechanics, and the agents whose kits make the most of them. */
 function HowItPlays({ m }: { m: MapInfo }) {
   // agents a rule helps here, on either side, by name (so the list doesn't read as a ranking)
   const users = (keep: (r: (typeof RULES)[number]) => boolean) => {

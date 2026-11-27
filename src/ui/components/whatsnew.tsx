@@ -12,7 +12,7 @@ export function openWhatsNew(notes: readonly VersionNotes[] = WHATS_NEW.filter((
   if (!notes.length) return Promise.resolve(undefined);
   const title = notes.length === 1 ? `What’s new in ${notes[0]!.version}` : 'What’s new';
   return openDialog(title, (close) => (
-    <DialogLayout title={title} icon="sparkle" close={() => close()} foot={<Button kind="primary" onClick={() => close()}>Got it</Button>}>
+    <DialogLayout title={title} close={() => close()} foot={<Button kind="primary" onClick={() => close()}>Got it</Button>}>
       {notes.map((n) => (
         <section key={n.version} class="whats-new">
           {notes.length > 1 && <h3>{n.version}</h3>}

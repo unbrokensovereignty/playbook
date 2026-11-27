@@ -12,6 +12,7 @@ import type { BackendKind } from '../data/backends.ts';
 import type { TabGuard, TabRole } from '../data/tabs.ts';
 import type { Settings } from '../core/settings.ts';
 import { ReadOnlyError } from '../data/db.ts';
+import { leave } from './leave.ts';
 
 // ---------------------------------------------------------------- data
 
@@ -93,10 +94,6 @@ export function parseRoute(hash: string): Route {
 }
 
 export const route = signal<Route>(typeof location !== 'undefined' ? parseRoute(location.hash) : { page: 'home', arg: '' });
-/** Which way the last page change went, for the slide. */
-export const routeDir = signal<1 | -1>(1);
-
-const order = (p: Page) => PAGES.indexOf(p);
 
 /** Counts trips to the page already showing (Search picking the setting you're on): a page can react to them. */
 export const revisit = signal(0);
@@ -111,9 +108,12 @@ export function onHashChange() {
   const next = parseRoute(location.hash);
   const prev = route.value;
   if (next.page === prev.page && next.arg === prev.arg) return;
-  routeDir.value = order(next.page) >= order(prev.page) ? 1 : -1;
   // a message about the page you're leaving would sit over the next one: let it go (Ctrl Z still undoes)
   dropOldToasts();
+  // so would a question about it (Back or Forward while a confirm is open): it goes as if cancelled. One
+  // that holds typing or choices (a name, the setup's answers, agents being picked, the theme and party
+  // editors) stays open over the page you went to, and still sends its answer where it was asked for
+  for (const d of dialogs.peek()) if (d.dismissable && !d.holds) closeDialog(d.id);
   route.value = next;
 }
 
@@ -156,13 +156,21 @@ let toastSeq = 0;
 export function toast(text: string, o: { tone?: Tone; undo?: boolean; action?: Toast['action']; ms?: number } = {}): number {
   const undo = o.undo && current ? current.db.takeFresh() : null;
   const t: Toast = { id: ++toastSeq, text, tone: o.tone ?? 'info', undo, action: o.action, ms: o.ms ?? (undo || o.action ? 6000 : 3500), at: Date.now() };
-  // one message at a time per kind of thing: keep the three newest
-  toasts.value = [...toasts.value, t].slice(-3);
+  // one message at a time per kind of thing: keep the three newest. The same words again (a second "Nothing to
+  // undo.") take the place of the first, unless the first still has a button that works
+  const spent = (x: Toast) => x.text === text && !x.undo && (!x.action || (!!x.action.live && !x.action.live()));
+  toasts.value = [...toasts.value.filter((x) => !spent(x)), t].slice(-3);
   return t.id;
 }
 /** Lets go of messages shown before now (problems stay, and so does one the action that got here just showed). */
 function dropOldToasts() { toasts.value = toasts.value.filter((t) => t.tone === 'bad' || Date.now() - t.at < TOAST_CARRY_MS); }
-export const dismissToast = (id: number) => { toasts.value = toasts.value.filter((t) => t.id !== id); };
+/** Takes a message away. It fades while its space closes, so a message above it moves down instead of jumping (ui/leave.ts). */
+export const dismissToast = (id: number, atOnce = false) => {
+  const drop = () => { toasts.value = toasts.value.filter((t) => t.id !== id); };
+  // a message whose own button brings the next one (Undo, then "Undid…") gives up its place at once
+  if (typeof document === 'undefined' || atOnce) { drop(); return; }
+  leave(document.querySelector(`[data-toast="${id}"]`), drop);
+};
 
 /** Runs a change and reports a read-only tab or an unexpected error as a message instead of failing. */
 export function safely<T>(fn: () => T): T | undefined {
@@ -189,6 +197,8 @@ export interface DialogSpec {
   render: (close: (value?: unknown) => void) => ComponentChildren;
   /** Esc and clicking outside close it (not for dialogs that would lose typing). */
   dismissable: boolean;
+  /** It holds typing or choices, so Back and Forward leave it open (Esc and its own buttons still close it). */
+  holds: boolean;
   resolve: (v: unknown) => void;
   label: string;
   wide?: boolean;
@@ -213,7 +223,12 @@ let byKeys = true;
 /** Keeps track of whether the keyboard or the mouse last moved focus (see pressesFocusedButton). Returns a stop function. */
 export function watchClicks(): () => void {
   const down = () => { byKeys = false; };
-  const key = (e: KeyboardEvent) => { if (e.key === 'Tab') byKeys = true; };
+  const key = (e: KeyboardEvent) => {
+    if (e.key === 'Tab') byKeys = true;
+    // a held Enter presses a button once, as a held Space does: its repeats mustn't go on to press
+    // whatever focus moves to next (the next game's Delete, once this game's row has gone)
+    if (e.key === 'Enter' && e.repeat && e.target instanceof HTMLElement && e.target.matches('button, a[href], [role=button], [role=menuitem], [role=option], [role=tab], [role=radio]')) e.preventDefault();
+  };
   addEventListener('pointerdown', down, true);
   addEventListener('keydown', key, true);
   return () => { removeEventListener('pointerdown', down, true); removeEventListener('keydown', key, true); };
@@ -229,11 +244,11 @@ export const pressesFocusedButton = (e: KeyboardEvent): boolean =>
   (e.key === 'Enter' || e.key === ' ') && e.target instanceof HTMLElement
   && (e.target.matches('[role=menuitem]') || (byKeys && e.target.matches('button, a[href], [role=button], [role=radio]')));
 
-export function openDialog<T>(label: string, render: DialogSpec['render'], o: { dismissable?: boolean; wide?: boolean } = {}): Promise<T | undefined> {
+export function openDialog<T>(label: string, render: DialogSpec['render'], o: { dismissable?: boolean; holds?: boolean; wide?: boolean } = {}): Promise<T | undefined> {
   // a message about the page would sit over the dialog: let it go, as on a change of page (Ctrl Z still undoes)
   dropOldToasts();
   return new Promise((resolve) => {
-    const d: DialogSpec = { id: ++dialogSeq, render, dismissable: o.dismissable ?? true, resolve: resolve as (v: unknown) => void, label, wide: o.wide };
+    const d: DialogSpec = { id: ++dialogSeq, render, dismissable: o.dismissable ?? true, holds: o.holds ?? false, resolve: resolve as (v: unknown) => void, label, wide: o.wide };
     dialogs.value = [...dialogs.value, d];
   });
 }

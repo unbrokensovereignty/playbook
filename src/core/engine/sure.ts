@@ -63,11 +63,11 @@ function clause(why: DoubtWhy, a: Agent, s: Situation): string {
   }
 }
 
-/** Why an agent's fit is less sure, as a sentence. */
-export function unsureWords(s: Situation, id: string, u: Unsure): string {
+/** Why an agent's fit is less sure, as a sentence; with fit numbers off in Settings (`numbers` false), without how far off. */
+export function unsureWords(s: Situation, id: string, u: Unsure, numbers = true): string {
   const a = agentById(id);
   if (!a) return 'This fit is less sure.';
-  return `This fit is less sure and could be off by about ${Math.round(u.by)}, since ${listJoin(u.why.map((w) => clause(w, a, s)))}.`;
+  return `This fit is less sure${numbers ? ` and could be off by about ${Math.round(u.by)}` : ''}, since ${listJoin(u.why.map((w) => clause(w, a, s)))}.`;
 }
 
 /** The agents whose fits can be less sure at all: those with early ranked numbers or no pro play yet. */

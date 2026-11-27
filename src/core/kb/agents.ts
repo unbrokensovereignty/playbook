@@ -8,30 +8,42 @@
  *
  * - `solo`: how well the agent works without the team's help (counts for more at low ranks).
  * - `skill`: how hard the agent is to play well (costs more at low ranks).
- * - `pop`: share of all ranked picks, in percent (a rough guide to what random teammates lock in).
+ * - `pop`: share of all ranked picks, in percent (a rough guide to what random teammates lock in),
+ *   the two sources below averaged.
  * - `win`: share of ranked games won by the team with the agent, in percent, across all ranks. Each
- *   source's numbers are moved so that its average pick wins 50%, then the two sources are averaged.
+ *   source's numbers are moved so that its average pick wins 50%, then the two sources are averaged,
+ *   each counting as far as its rate can be trusted (see below).
  *   A win rate says who plays an agent as well as how strong the agent is, so the engine only counts
  *   it within a few points of 50% (WIN_CAP in engine/weights.ts).
  * - `pro` (worked out from pro.ts): how often pro teams picked the agent at the year's top events, in
- *   percent of the maps counted there.
+ *   percent of the teams' lineups on the maps counted there (two to a map).
  *
- * Sources: the abilities are the game's own text (content.gen.ts). Pick rates: ranked shares
- * across all ranks (metabot.gg, patches 13.08 and 13.09) and pro picks at Champions 2026 (vlr.gg).
- * Win rates: metabot.gg (October 2026) and winio.ai (1 October 2026), across all ranks, as of
- * STATS_ON. Checked against metabot.gg's numbers of 5 and 11 November 2026: every agent but Hush was
- * within 0.3 points of the rate here, so the rates stand. Strength values are judgment, checked
- * against how the agents are used in pro play.
+ * Sources: the abilities are the game's own text (content.gen.ts). Ranked pick and win rates are
+ * patch 13.10's, across all ranks, from metabot.gg (its agent pages, updated 19 and 20 November
+ * 2026, 113,073 matches) and op.gg (updated 20 November 2026, about 1.28 million games), read on
+ * STATS_ON. winio.ai, the second source until then, has nothing newer than 1 October 2026, so op.gg
+ * takes its place. op.gg has from 90 to 300 times as many games of each agent, and the two differ
+ * most where metabot.gg has few (KAY/O wins 40.8% there and 46.4% on op.gg, once moved, over 401
+ * matches against about 114,000 games). A rate from n games is off by about 50 / √n points on
+ * chance alone, 2,500 / n once squared. Even for the agents both have thousands of games of, the two
+ * differ by about 0.9 points either way, more than chance explains, and what chance leaves comes to
+ * about 0.3 (in squared points) for each source's own way of counting. So each source's rate counts
+ * in proportion to 1 / (0.3 + 2,500 / n): op.gg makes up most of each rate, and metabot.gg up to two
+ * fifths of it for the agents picked most. Pick rates are averaged evenly,
+ * since the two count different players (Neon is 7.1% of metabot.gg's picks and 3.8% of op.gg's).
+ * Pro picks are from this year's top events (pro.ts, from vlr.gg). Strength values are judgment,
+ * checked against how the agents are used in pro play.
  *
  * Hush came out on 27 October 2026 (patch 13.09), after the year's last pro event, so she has no
- * pro picks yet (see PRO_CUTOFF in pro.ts). Her pick rate is from her first days across all ranks
- * (op.gg, patch 13.09: 6.8% of picks, and 46.9% of games won while players learn her, which is 47.5% once
- * moved like the others; the engine counts a new agent's win rate for half). Her strengths
+ * pro picks yet (see PRO_CUTOFF in pro.ts). Her ranked numbers are from her first weeks, while
+ * players learn her: in patch 13.10 she is 4.2% of metabot.gg's picks and 7.1% of op.gg's, and her
+ * team wins 50.3% and 47.6% of games there (48.7% moved and averaged like the others, up from the
+ * 46.9% op.gg had in her first days; the engine counts a new agent's win rate for half). Her strengths
  * come from her kit and hands-on reviews: a second duelist who sets the entry up rather than
  * diving first; Displacement only concusses enemies pulled into a wall or another player, so it is
  * best in tight spaces; Flashbulb is a single steerable flash; Flow is a slow, delayed move; and
- * Suspension lifts everyone it catches for 4 seconds, unable to shoot or use abilities, but is a
- * hard shot to land. Her steered utility makes her harder to play well than most duelists (metabot.gg rates her Hard), about as hard as Viper.
+ * Suspension lifts everyone it catches, unable to shoot or use abilities, but is a hard shot to
+ * land (Riot hasn't said for how long, and no review gives a figure). Her steered utility makes her harder to play well than most duelists (metabot.gg rates her Hard), about as hard as Viper.
  *
  * Breach works alone least of the initiators: his stuns and flashes make fights for teammates who
  * follow them up, which guides for the low ranks say not to count on (ProSettings, GAMES.GG, Sequel).
@@ -71,158 +83,158 @@ export interface Agent extends Omit<AgentDef, 'caps'> {
 const DEFS: readonly AgentDef[] = [
   // ------------------------------------------------ duelists
   {
-    id: 'jett', name: 'Jett', role: 'duelist', released: '2020-06-02', solo: 0.85, skill: 0.65, pop: 13.6, win: 49.6,
+    id: 'jett', name: 'Jett', role: 'duelist', released: '2020-06-02', solo: 0.85, skill: 0.65, pop: 10.4, win: 49.9,
     caps: 'entry .75 E; mobility .85 EQ; duel .8 GX; angles .75 E; smoke .15 C',
     line: 'Dashes onto site first and wins duels, often with the Operator.',
   },
   {
-    id: 'phoenix', name: 'Phoenix', role: 'duelist', released: '2020-06-02', solo: 0.8, skill: 0.3, pop: 3.6, win: 51.5,
+    id: 'phoenix', name: 'Phoenix', role: 'duelist', released: '2020-06-02', solo: 0.8, skill: 0.3, pop: 4.0, win: 51.3,
     caps: 'flash .7 Q; entry .55 QX; clear .3 E; stall .3 E; postplant .15 E; retake .4 QX; sustain .3 E; wall .2 C; duel .6 GX',
     line: 'Flashes himself in, heals in his own fire and takes risk-free fights with his ultimate.',
   },
   {
-    id: 'raze', name: 'Raze', role: 'duelist', released: '2020-06-02', solo: 0.7, skill: 0.6, pop: 3.2, win: 49.8,
+    id: 'raze', name: 'Raze', role: 'duelist', released: '2020-06-02', solo: 0.7, skill: 0.6, pop: 2.9, win: 50.4,
     caps: 'entry .8 Q; clear .85 EC; mobility .6 Q; stall .35 E; postplant .45 E; recon .05 C; duel .7 GX',
     line: 'Blasts onto site and clears tight corners with grenades and her Boom Bot.',
   },
   {
-    id: 'reyna', name: 'Reyna', role: 'duelist', released: '2020-06-02', solo: 1, skill: 0.45, pop: 7.2, win: 49.0,
+    id: 'reyna', name: 'Reyna', role: 'duelist', released: '2020-06-02', solo: 1, skill: 0.45, pop: 6.9, win: 49.7,
     caps: 'duel .95 GQX; entry .5 E; flash .25 C; sustain .35 Q; mobility .35 E; angles .3 E',
     line: 'Snowballs off kills with heals and escapes, but gives the team little utility.',
   },
   {
-    id: 'yoru', name: 'Yoru', role: 'duelist', released: '2021-01-12', solo: 0.55, skill: 0.85, pop: 3.5, win: 48.2,
+    id: 'yoru', name: 'Yoru', role: 'duelist', released: '2021-01-12', solo: 0.55, skill: 0.85, pop: 2.1, win: 48.7,
     caps: 'flash .7 Q; entry .8 E; mobility .75 E; recon .4 CX; duel .6 G; angles .35 E',
     line: 'Teleports and flashes from unexpected angles, which makes him strong for fakes and lurks.',
   },
   {
-    id: 'neon', name: 'Neon', role: 'duelist', released: '2022-01-11', solo: 0.7, skill: 0.9, pop: 5.5, win: 50.9,
+    id: 'neon', name: 'Neon', role: 'duelist', released: '2022-01-11', solo: 0.7, skill: 0.9, pop: 5.5, win: 51.0,
     caps: 'entry .95 E; mobility .95 E; wall .5 C; smoke .1 C; disrupt .5 Q; duel .75 GX',
     line: 'The fastest entry in the game, with walls to cross and stuns to clear.',
   },
   {
-    id: 'iso', name: 'Iso', role: 'duelist', released: '2023-10-31', solo: 0.85, skill: 0.6, pop: 1.2, win: 47.7,
+    id: 'iso', name: 'Iso', role: 'duelist', released: '2023-10-31', solo: 0.85, skill: 0.6, pop: 1.1, win: 49.2,
     caps: 'duel .85 EX; entry .55 C; wall .3 C; disrupt .3 Q',
     line: 'A shield and a moving wall make him hard to beat in a straight fight.',
   },
   {
-    id: 'waylay', name: 'Waylay', role: 'duelist', released: '2025-03-04', solo: 0.7, skill: 0.7, pop: 3.9, win: 48.6,
+    id: 'waylay', name: 'Waylay', role: 'duelist', released: '2025-03-04', solo: 0.7, skill: 0.7, pop: 2.5, win: 49.5,
     caps: 'entry .8 Q; mobility .85 QE; disrupt .45 CX; stall .3 C; duel .75 G; angles .35 E',
     line: 'Dashes in, slows the defenders with light and zips back to safety.',
   },
   {
-    id: 'hush', name: 'Hush', role: 'duelist', released: '2026-10-27', solo: 0.6, skill: 0.85, pop: 6.8, win: 47.5,
+    id: 'hush', name: 'Hush', role: 'duelist', released: '2026-10-27', solo: 0.6, skill: 0.85, pop: 5.6, win: 48.7,
     caps: 'disrupt .45 EX; entry .5 EQ; flash .45 Q; clear .25 E; mobility .3 C; retake .45 X; postplant .2 X; stall .25 E; duel .6 G',
     line: 'Steers a flash and a pulling blast around corners, and her ultimate lifts everyone it reaches off the ground.',
   },
   ...NEW_AGENTS,
   // ------------------------------------------------ initiators
   {
-    id: 'sova', name: 'Sova', role: 'initiator', released: '2020-06-02', solo: 0.5, skill: 0.6, pop: 8.1, win: 51.2,
+    id: 'sova', name: 'Sova', role: 'initiator', released: '2020-06-02', solo: 0.5, skill: 0.6, pop: 7.0, win: 50.8,
     caps: 'recon .95 EC; clear .5 Q; postplant .85 QX; retake .6 EX; duel .3 G',
     line: 'Finds enemies with darts and his drone, and stops defuses with lineups.',
   },
   {
-    id: 'breach', name: 'Breach', role: 'initiator', released: '2020-06-02', solo: 0.25, skill: 0.55, pop: 0.5, win: 46.8,
+    id: 'breach', name: 'Breach', role: 'initiator', released: '2020-06-02', solo: 0.25, skill: 0.55, pop: 0.5, win: 47.9,
     caps: 'flash .65 Q; disrupt .95 EX; clear .55 C; retake .8 X; postplant .35 C; entry .3 E',
     line: 'Stuns and flashes through walls so the duelists walk into dazed enemies.',
   },
   {
-    id: 'skye', name: 'Skye', role: 'initiator', released: '2020-10-27', solo: 0.45, skill: 0.55, pop: 2.4, win: 49.9,
+    id: 'skye', name: 'Skye', role: 'initiator', released: '2020-10-27', solo: 0.45, skill: 0.55, pop: 2.4, win: 50.0,
     caps: 'flash .7 E; recon .5 QX; clear .55 Q; disrupt .3 Q; retake .7 EX; sustain .6 C',
     line: 'Guides her own flashes, scouts with a dog and heals the team.',
   },
   {
-    id: 'kayo', name: 'KAY/O', role: 'initiator', released: '2021-06-22', solo: 0.45, skill: 0.55, pop: 0.4, win: 45.6,
+    id: 'kayo', name: 'KAY/O', role: 'initiator', released: '2021-06-22', solo: 0.45, skill: 0.55, pop: 0.6, win: 46.2,
     caps: 'flash .8 Q; disrupt .7 EX; recon .2 E; clear .45 C; postplant .45 C; retake .7 X; entry .3 X',
     line: 'Flashes and suppresses enemy abilities, and his ultimate wins retakes.',
   },
   {
-    id: 'fade', name: 'Fade', role: 'initiator', released: '2022-04-27', solo: 0.5, skill: 0.6, pop: 5.4, win: 50.8,
+    id: 'fade', name: 'Fade', role: 'initiator', released: '2022-04-27', solo: 0.5, skill: 0.6, pop: 6.5, win: 50.3,
     caps: 'recon .9 EC; disrupt .55 Q; clear .45 C; flash .2 C; retake .75 X; postplant .4 Q',
     line: 'Reveals enemies with Haunt and her Prowlers, and tethers them in place.',
   },
   {
-    id: 'gekko', name: 'Gekko', role: 'initiator', released: '2023-03-07', solo: 0.55, skill: 0.5, pop: 0.2, win: 48.5,
+    id: 'gekko', name: 'Gekko', role: 'initiator', released: '2023-03-07', solo: 0.55, skill: 0.5, pop: 0.6, win: 49.2,
     caps: 'flash .65 E; disrupt .55 QX; clear .55 QC; postplant .7 CQ; recon .35 Q; retake .65 QX',
     line: 'Sends out creatures that flash, stun and plant or defuse the Spike, then picks them back up to use again.',
   },
   {
-    id: 'tejo', name: 'Tejo', role: 'initiator', released: '2025-01-08', solo: 0.5, skill: 0.6, pop: 0.9, win: 49.2,
+    id: 'tejo', name: 'Tejo', role: 'initiator', released: '2025-01-08', solo: 0.5, skill: 0.6, pop: 0.6, win: 48.8,
     caps: 'recon .65 C; disrupt .55 QC; clear .75 E; postplant .95 EX; retake .7 X',
     line: 'Missiles and a stealth drone that clear sites and stop defuses from afar.',
   },
   // ------------------------------------------------ controllers
   {
-    id: 'brimstone', name: 'Brimstone', role: 'controller', released: '2020-06-02', solo: 0.7, skill: 0.3, pop: 0.6, win: 49.6,
+    id: 'brimstone', name: 'Brimstone', role: 'controller', released: '2020-06-02', solo: 0.7, skill: 0.3, pop: 0.9, win: 49.4,
     caps: 'smoke .8 E; postplant .85 QX; clear .45 Q; stall .5 Q; retake .45 X; entry .05 C; duel .3 C; mobility .1 C',
     line: 'Three quick smokes for an execute, and the best post-plant mollies.',
   },
   {
-    id: 'viper', name: 'Viper', role: 'controller', released: '2020-06-02', solo: 0.45, skill: 0.8, pop: 1.8, win: 49.8,
+    id: 'viper', name: 'Viper', role: 'controller', released: '2020-06-02', solo: 0.45, skill: 0.8, pop: 0.4, win: 47.7,
     caps: 'smoke .6 Q; wall .95 E; postplant .85 CX; stall .6 CQE; anchor .35 X; clear .4 C; retake .35 X',
     line: 'Long toxic walls and the strongest post-plant, at her best on big, open maps.',
   },
   {
-    id: 'omen', name: 'Omen', role: 'controller', released: '2020-06-02', solo: 0.7, skill: 0.45, pop: 2.4, win: 46.5,
+    id: 'omen', name: 'Omen', role: 'controller', released: '2020-06-02', solo: 0.7, skill: 0.45, pop: 3.2, win: 46.6,
     caps: 'smoke .9 E; flash .5 Q; mobility .55 CX; stall .25 E; retake .35 Q; entry .2 C; duel .35 G; angles .45 C',
     line: 'Fast-recharging smokes and a nearsight that suit any map.',
   },
   {
-    id: 'astra', name: 'Astra', role: 'controller', released: '2021-03-02', solo: 0.25, skill: 0.9, pop: 1.2, win: 47.3,
+    id: 'astra', name: 'Astra', role: 'controller', released: '2021-03-02', solo: 0.25, skill: 0.9, pop: 0.6, win: 46.7,
     caps: 'smoke .9 E; wall .7 X; disrupt .55 QC; stall .55 QC; postplant .4 CQ; retake .55 QC',
     line: 'Stars placed anywhere on the map for smokes, stuns and pulls.',
   },
   {
-    id: 'harbor', name: 'Harbor', role: 'controller', released: '2022-10-18', solo: 0.4, skill: 0.55, pop: 0.3, win: 46.5,
+    id: 'harbor', name: 'Harbor', role: 'controller', released: '2022-10-18', solo: 0.4, skill: 0.55, pop: 0.3, win: 45.4,
     caps: 'wall .85 Q; smoke .65 E; disrupt .55 CX; flash .25 C; stall .45 QC; entry .3 Q; retake .45 X',
     line: 'Water walls that slow anyone crossing, and a shielded smoke.',
   },
   {
-    id: 'clove', name: 'Clove', role: 'controller', released: '2024-03-26', solo: 0.85, skill: 0.35, pop: 13.9, win: 53.3,
+    id: 'clove', name: 'Clove', role: 'controller', released: '2024-03-26', solo: 0.85, skill: 0.35, pop: 13.5, win: 51.6,
     // patch 13.09: Pick-me-up's speed went from 15% to 10%, and killing Clove after Not Dead Yet
     // gives the killer an ultimate point and a step toward their signature ability
     caps: 'smoke .8 E; entry .4 CX; clear .3 Q; sustain .15 C; duel .45 GX; mobility .25 C',
     line: 'Smokes even after dying, so they can play aggressively like a duelist.',
   },
   {
-    id: 'miks', name: 'Miks', role: 'controller', released: '2026-03-18', solo: 0.5, skill: 0.55, pop: 0.9, win: 47.9,
+    id: 'miks', name: 'Miks', role: 'controller', released: '2026-03-18', solo: 0.5, skill: 0.55, pop: 1.2, win: 48.1,
     caps: 'smoke .8 E; disrupt .5 CX; sustain .4 C; entry .35 Q; mobility .3 Q; stall .3 X; retake .4 X',
     line: 'Smokes from a map, a pulse that stuns or heals, and a stim that speeds up a partner.',
   },
   // ------------------------------------------------ sentinels
   {
-    id: 'sage', name: 'Sage', role: 'sentinel', released: '2020-06-02', solo: 0.7, skill: 0.2, pop: 1.3, win: 51.9,
+    id: 'sage', name: 'Sage', role: 'sentinel', released: '2020-06-02', solo: 0.7, skill: 0.2, pop: 2.3, win: 51.4,
     caps: 'sustain .95 EX; stall .8 CQ; anchor .55 CQ; wall .25 C; retake .4 X; postplant .35 Q; entry .15 C; disrupt .05 Q',
     line: 'Heals and revives teammates, and stops a push with a wall or a slow.',
   },
   {
-    id: 'cypher', name: 'Cypher', role: 'sentinel', released: '2020-06-02', solo: 0.55, skill: 0.6, pop: 3.2, win: 50.6,
+    id: 'cypher', name: 'Cypher', role: 'sentinel', released: '2020-06-02', solo: 0.55, skill: 0.6, pop: 3.9, win: 50.9,
     caps: 'flank .95 C; anchor .75 CQE; recon .6 EX; stall .45 C; smoke .1 Q; retake .15 X; postplant .2 Q; disrupt .1 C',
     line: 'Tripwires and a camera that watch flanks better than anyone.',
   },
   {
-    id: 'killjoy', name: 'Killjoy', role: 'sentinel', released: '2020-08-04', solo: 0.6, skill: 0.45, pop: 1.8, win: 51.0,
+    id: 'killjoy', name: 'Killjoy', role: 'sentinel', released: '2020-08-04', solo: 0.6, skill: 0.45, pop: 1.0, win: 51.2,
     caps: 'anchor .85 CQE; flank .6 QE; stall .7 CX; postplant .7 C; recon .25 E; retake .5 X; clear .3 C',
     line: 'Turret and bots lock down a site, and her ultimate wins retakes.',
   },
   {
-    id: 'chamber', name: 'Chamber', role: 'sentinel', released: '2021-11-16', solo: 0.7, skill: 0.75, pop: 10.4, win: 49.1,
+    id: 'chamber', name: 'Chamber', role: 'sentinel', released: '2021-11-16', solo: 0.7, skill: 0.75, pop: 11.1, win: 49.3,
     caps: 'angles .95 EX; duel .75 GQ; flank .6 C; anchor .75 CE; mobility .45 E; stall .25 C; disrupt .1 C',
     line: 'Holds long angles with his rifle and teleports out before anyone can trade.',
   },
   {
-    id: 'deadlock', name: 'Deadlock', role: 'sentinel', released: '2023-06-27', solo: 0.45, skill: 0.5, pop: 0.6, win: 49.7,
+    id: 'deadlock', name: 'Deadlock', role: 'sentinel', released: '2023-06-27', solo: 0.45, skill: 0.5, pop: 0.7, win: 48.8,
     caps: 'stall .8 CE; anchor .7 EQ; flank .65 Q; disrupt .3 CQ; retake .35 X',
     line: 'Barrier walls and sound sensors that stop a rush cold.',
   },
   {
-    id: 'vyse', name: 'Vyse', role: 'sentinel', released: '2024-08-27', solo: 0.5, skill: 0.6, pop: 1.3, win: 50.4,
+    id: 'vyse', name: 'Vyse', role: 'sentinel', released: '2024-08-27', solo: 0.5, skill: 0.6, pop: 1.3, win: 50.0,
     caps: 'anchor .8 CQ; stall .7 CQ; flank .7 Q; flash .45 E; disrupt .4 X; postplant .45 C; retake .5 X',
     line: 'Hidden walls and thorns trap attackers, and her ultimate jams their rifles.',
   },
   {
-    id: 'veto', name: 'Veto', role: 'sentinel', released: '2025-10-07', solo: 0.55, skill: 0.55, pop: 0.6, win: 48.8,
+    id: 'veto', name: 'Veto', role: 'sentinel', released: '2025-10-07', solo: 0.55, skill: 0.55, pop: 0.5, win: 49.4,
     caps: 'anchor .65 QE; flank .6 Q; stall .55 Q; mobility .35 C; disrupt .35 Q; duel .5 X; angles .35 C',
     line: 'Destroys incoming utility, traps attackers and teleports to hold two places at once.',
   },
@@ -259,6 +271,6 @@ export const NEW_DAYS = 60;
 /** New on `today` (a day key): coming soon, out within NEW_DAYS, or still an estimate. */
 export const isNew = (a: { released: string; estimate?: boolean }, today: string): boolean => !!a.estimate || diffDays(a.released, today) <= NEW_DAYS;
 /** The day the pick rates were taken. */
-export const STATS_ON = '2026-10-29';
+export const STATS_ON = '2026-11-20';
 /** The agent's pick rate comes from their first weeks, when players are still learning them. */
 export const earlyStats = (a: { released: string }): boolean => diffDays(a.released, STATS_ON) < NEW_DAYS;

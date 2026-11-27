@@ -1,7 +1,7 @@
 /**
  * For an agent's page: what the agent makes the other team play around, and who answers it (the
  * threats in kb/counters.ts, read off the agent's kit as the engine reads the other team's), and the
- * partners pro teams played them with this year (kb/lineups.ts).
+ * partners pro teams played them with this year (kb/lineups.ts), counted by team lineup.
  */
 import { AGENTS, agentById, type Agent } from '../kb/agents.ts';
 import { THREATS, threatLine, type Threat } from '../kb/counters.ts';
@@ -39,13 +39,21 @@ export function troubleFrom(id: string): Trouble[] {
   }));
 }
 
-/** A partner pro teams played an agent with: on how many of the agent's maps, and the share of them. */
+/**
+ * A partner pro teams played an agent with: in how many of the agent's lineups (`maps`), and the
+ * share of them. A lineup is one team's five agents on one map, so a map where both teams played
+ * the agent counts twice.
+ */
 export interface ProDuo { id: string; maps: number; share: number }
 
-/** Fewest pro maps an agent needs before their partners say anything. */
+/** Fewest pro lineups (one team's five on one map) an agent needs before their partners say anything. */
 export const DUO_MAPS = 10;
 
-/** The partners pro teams played an agent with most this year, most first, and on how many maps the agent was played. */
+/**
+ * The partners pro teams played an agent with most this year, most first, and in how many lineups
+ * the agent was played (`maps`): each team's lineup on each map counts once, so a map where both
+ * teams picked the agent counts twice, and the count can be up to twice the maps played.
+ */
 export function proDuos(id: string, most = 4): { maps: number; duos: ProDuo[] } {
   const together = new Map<string, number>();
   let maps = 0;

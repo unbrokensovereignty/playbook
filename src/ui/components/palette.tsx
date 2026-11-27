@@ -4,9 +4,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Icon, type IconName } from '../icons.tsx';
 import { Kbd } from './controls.tsx';
+import { overlayGone } from './overlays.tsx';
 import { paletteOpen } from '../state.ts';
 import { play } from '../sound.ts';
-import { fold } from '../../core/text.ts';
+import { cut, fold } from '../../core/text.ts';
 
 export interface Command {
   id: string;
@@ -81,12 +82,13 @@ export function Palette({ commands }: { commands: () => Command[] }) {
   const run = (c: Command | undefined) => {
     if (!c) return;
     close();
+    overlayGone();
     play('tap');
     c.run();
   };
   let lastGroup = '';
   return (
-    <div class="palette" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+    <div class="palette" onMouseDown={(e) => { if (e.target === e.currentTarget) { close(); overlayGone(); } }}>
       <div class="palette-box" role="dialog" aria-modal="true" aria-label="Search commands">
         <div class="palette-input">
           <Icon name="search" size={20} />
@@ -113,7 +115,8 @@ export function Palette({ commands }: { commands: () => Command[] }) {
           <Kbd k="escape" />
         </div>
         <div class="palette-list" id="palette-list" role="listbox" ref={list}>
-          {results.length === 0 && <div class="palette-empty">Nothing matches “{q.trim()}”.</div>}
+          {/* a long paste (a copied plan) is quoted only in part */}
+          {results.length === 0 && <div class="palette-empty">Nothing matches “{q.trim().length > 60 ? `${cut(q.trim(), 60).trimEnd()}…` : q.trim()}”.</div>}
           {results.flatMap((c, i) => {
             // one flat keyed list (headings and items side by side), so reordering as you type
             // moves whole rows and never leaves an old row on screen

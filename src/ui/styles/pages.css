@@ -3,7 +3,7 @@
 .mr-auto { margin-right: auto; }
 .inline-icon { display: inline-block; vertical-align: -3px; }
 .banners { display: grid; }
-.tab-body { margin-top: 20px; animation: fade-in var(--dur-base) var(--ease) both; }
+.tab-body { margin-top: 20px; }
 
 /* ---------------------------------------------------------------- settings */
 
@@ -20,11 +20,11 @@
   .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .settings-nav { position: static; display: flex; flex-wrap: wrap; gap: 4px; padding-top: 0; }
 }
-.settings-advanced { margin-top: 12px; padding: 12px; border-top: 1px solid var(--line); font-size: 0.9rem; }
+.settings-advanced { margin-top: 12px; padding: 12px; border-top: 1px solid var(--line); font-size: var(--fs-md); }
 .settings-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
 .settings-section { scroll-margin-top: 24px; }
 .settings-section > h2 { margin-bottom: 2px; }
-.settings-section > p.muted { margin-bottom: 8px; font-size: 0.93rem; }
+.settings-section > p.muted { margin-bottom: 8px; font-size: var(--fs-md); }
 
 /* With little room (a small window, large text) the control drops below its words instead of squeezing them or itself. */
 /* Settings' "Only “set name”": a long name is cut short (it's in full as the button's tooltip) */
@@ -33,12 +33,12 @@
 .scope-switch button:first-child { flex: none; }
 .setting-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; min-height: 60px; padding: 12px 0; border-top: 1px solid var(--line); scroll-margin-top: 80px; }
 .setting-text { flex: 1 1 9em; min-width: 0; display: grid; gap: 2px; }
-.setting-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 650; }
-.setting-help { color: var(--text2); font-size: 0.88rem; }
+.setting-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-weight: 600; }
+.setting-help { color: var(--text2); font-size: var(--fs-sm); }
 /* Controls that don't fit side by side (two buttons with very large text) wrap rather than push the page wider. */
 .setting-control { flex: 0 1 auto; margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; max-width: 100%; }
 .setting-control .row { flex-wrap: wrap; justify-content: flex-end; }
-.setting-control .select { width: auto; min-width: 10em; max-width: 100%; }
+.setting-control .select { width: 15em; min-width: 0; max-width: 100%; } /* one width, so the column lines up */
 .comfort-list { gap: 8px; }
 .setting-control .comfort-row { flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
 .comfort-name { min-width: 6em; }
@@ -52,20 +52,21 @@
   background: var(--surface); cursor: pointer; font-weight: 600; color: var(--text2); transition: border-color var(--dur-quick), background-color var(--dur-quick);
 }
 .key-capture:hover { border-color: var(--accent); }
-.key-capture.listening { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); animation: pulse 1s ease-in-out infinite; }
+.key-capture.listening { border-style: solid; border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 
 /* ---------------------------------------------------------------- themes */
 
 .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-.theme-tile { position: relative; }
+.theme-tile { position: relative; min-width: 0; }
 .theme-pick {
   display: grid; gap: 10px; width: 100%; padding: 8px 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r-lg);
   background: var(--surface); cursor: pointer; text-align: left; transition: border-color var(--dur-quick), transform var(--dur-quick) var(--ease), box-shadow var(--dur-quick);
+  height: 100%; align-content: start;
 }
-.theme-pick:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.theme-pick:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); }
 .theme-pick:active { transform: scale(0.98); }
 .theme-tile.current .theme-pick { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.theme-name { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-weight: 650; }
+.theme-name { display: flex; align-items: center; gap: 6px; padding: 0 4px; font-weight: 600; }
 .theme-name .icon { color: var(--accent-text); }
 .theme-more { position: absolute; top: 14px; right: 14px; background: color-mix(in oklab, var(--surface) 85%, transparent); opacity: 0; transition: opacity var(--dur-quick); }
 .theme-tile:hover .theme-more, .theme-more:focus-visible { opacity: 1; }
@@ -80,11 +81,11 @@
 .tp-side i.on { background: var(--accent); }
 .tp-main { display: grid; align-content: center; justify-items: center; gap: 8px; padding: 8px; }
 .tp-card { display: grid; justify-items: center; width: 78%; padding: 10px 6px; border-radius: 8px; background: var(--card); box-shadow: var(--shadow-2); border: 1px solid var(--line); }
-.tp-card b { color: var(--card-text); font-size: 0.9rem; font-weight: 600; }
+.tp-card b { color: var(--card-text); font-size: var(--fs-md); font-weight: 600; }
 .tp-card span { color: var(--text2); font-size: 0.7rem; }
 .big .tp-card { padding: 22px 10px; }
 .big .tp-card b { font-size: 1.3rem; }
-.big .tp-card span { font-size: 0.9rem; }
+.big .tp-card span { font-size: var(--fs-md); }
 .tp-row { display: flex; gap: 5px; }
 .tp-btn { width: 22px; height: 9px; border-radius: 3px; }
 .big .tp-btn { width: 48px; height: 18px; border-radius: 6px; }
@@ -93,19 +94,26 @@
 .theme-editor { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; color: var(--text); }
 .color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .color-grid .color-field .input { width: 6.4em; }
-.color-grid .toggle { font-weight: 650; font-size: 0.92rem; }
+.color-grid .toggle { font-weight: 600; font-size: var(--fs-md); }
 .dialog-icon { color: var(--accent-text); margin-top: 3px; }
+.dialog-icon.danger { color: var(--bad-text); }
 
 /* ---------------------------------------------------------------- help */
 
 .guide h2 { margin-bottom: 10px; }
-.guide-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
-@media (max-width: 1000px) { .guide-cols { grid-template-columns: minmax(0, 1fr); } }
+/* two balanced columns: a long panel (Plays) no longer leaves screens of blank beside a short one */
+.guide-cols { columns: 2; column-gap: 16px; }
+.guide-cols > .panel { break-inside: avoid; margin-bottom: 16px; }
+.guide-cols > .panel:last-child { margin-bottom: 0; }
+@media (max-width: 1000px) { .guide-cols { columns: 1; } }
 .guide ol { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; }
 .guide p { margin: 0; }
+.guide > .panel > :is(ol, p) { max-width: 75ch; }
 .key-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .key-table td { padding: 7px 0; border-top: 1px solid var(--line); vertical-align: middle; }
 .key-table td:first-child { width: 42%; }
+.sound-levels :is(th, td) { padding-inline-end: var(--sp-3); text-align: start; }
+.sound-levels td:first-child { width: auto; }
 /* the labels keep to one line, and a long value (the releases address) wraps inside its card */
 .facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
 .facts dt { color: var(--text2); font-weight: 600; }
@@ -135,16 +143,16 @@
 /* the search keeps a usable width; the menus wrap below it when there isn't room */
 .list-tools .search-input { flex: 1 1 220px; min-width: 0; }
 .list-tools .select { width: auto; flex: 0 1 auto; max-width: 210px; min-width: 120px; }
-.row-star { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text3); cursor: pointer; opacity: 0.45; transition: opacity var(--dur-quick), transform var(--dur-quick); }
+.row-star { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--r-sm); background: none; color: var(--text3); cursor: pointer; opacity: 0.45; transition: opacity var(--dur-quick), transform var(--dur-quick) var(--ease); }
 .row-star:focus-visible, .row-star.on { opacity: 1; }
 .row-star:hover { background: var(--surface-3); }
-.row-star:active { transform: scale(0.88); }
+.row-star:active { transform: scale(0.95); }
 .list-empty { padding: 28px; text-align: center; }
-.mini-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.mini-table { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }
 .mini-table td { padding: 6px 8px; border-top: 1px solid var(--line); }
 .mini-table td:last-child { color: var(--text2); }
 .problems summary { cursor: pointer; font-weight: 600; color: var(--warn-text); }
-.problems ul { margin: 6px 0 0; padding-left: 1.2em; font-size: 0.85rem; display: grid; gap: 3px; }
+.problems ul { margin: 6px 0 0; padding-left: 1.2em; font-size: var(--fs-sm); display: grid; gap: 3px; }
 /* over a dialog, messages move to the top so they never cover its buttons */
 body:has(.scrim) .toasts { top: 20px; bottom: auto; }
 
@@ -171,8 +179,15 @@ body:has(.scrim) .toasts { top: 20px; bottom: auto; }
 .record-list, .game-list { display: grid; gap: 8px; }
 .record-list li, .game-row { gap: 10px; }
 .record-name { min-width: 90px; font-weight: 600; }
-.game-row { padding-top: 8px; border-top: 1px solid var(--line); }
-.game-row:first-child { padding-top: 0; border-top: 0; }
+/* a count and a record never break inside; a record that doesn't fit goes under the row */
+.record-list li { flex-wrap: wrap; row-gap: 0; }
+.record-list li > :is(.grow, .num) { white-space: nowrap; }
+.record-list li > .num { margin-left: auto; }
+/* each row carries the line under it, so no row changes when a neighbour leaves */
+.game-row { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.game-row:last-child { border-bottom-color: transparent; }
+.game-list { margin-bottom: -9px; }
 .game-what { min-width: 170px; font-weight: 600; }
+.game-row > .badge { min-width: 3.6em; justify-content: center; } /* names and teams line up whatever the result */
 .game-offer { gap: 12px; align-items: center; }
 .game-offer p { margin: 0; }

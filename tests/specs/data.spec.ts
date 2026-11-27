@@ -198,6 +198,25 @@ describe('the planner’s question', () => {
     eq(repo.app().recent[0]!.map, 'split');
     repo.clearRecent();
     eq(repo.app().recent, []);
+    // clearing them is a change like any other, so Undo brings them back
+    eq(repo.undo()?.label, 'Clear your recent questions');
+    eq(repo.app().recent.length, RECENT_MOST);
+  });
+  spec('an offer in Your games put away with Not now is one undoable step, and old data has none', async () => {
+    const { repo } = await fresh();
+    eq(repo.app().offersPutOff, {}, 'nothing put away to begin with');
+    repo.putOffOffer('omen', { to: 'main', wins: 7, losses: 3 }, 'Put off the offer for Omen');
+    eq(repo.app().offersPutOff, { omen: { to: 'main', wins: 7, losses: 3 } });
+    eq(repo.undo()?.label, 'Put off the offer for Omen');
+    eq(repo.app().offersPutOff, {});
+    repo.redo();
+    eq(repo.app().offersPutOff.omen?.wins, 7);
+    // saved app state from before there was a Not now reads back with nothing put away
+    const t = emptyTables();
+    t.meta.set('app', { firstUse: T0, tips: ['tour-offer'] });
+    eq((checkTables(t, T0).tables.meta.get('app') as { offersPutOff: unknown }).offersPutOff, {});
+    repo.eraseAll();
+    eq(repo.app().offersPutOff, {}, 'erasing everything forgets them too');
   });
 });
 
@@ -298,9 +317,12 @@ describe('saved data', () => {
     repo.restore(backup.data, 'merge');
     eq(repo.plans().length, 2);
     repo.addRecent(haven());
+    repo.updateApp({ welcomed: true });
     repo.eraseAll();
     eq([repo.plans().length, repo.app().recent.length], [0, 0]);
+    // erasing starts over, so the app asks how you play again
+    eq(repo.app().welcomed, false);
     repo.undo();
-    eq(repo.plans().length, 2);
+    eq([repo.plans().length, repo.app().welcomed], [2, true]);
   });
 });

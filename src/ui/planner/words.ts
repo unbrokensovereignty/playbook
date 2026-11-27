@@ -20,15 +20,17 @@ export function howOften(x: number): string {
 /**
  * What an agent adds to their best comp over the next best agent of their role in their place
  * (AgentAnswer.edge): "21 ahead of Skye, the next best initiator, in their best comp", or with
- * `lead`, a sentence: "In that comp, Fade is 21 ahead of Skye, the next best initiator."
+ * `lead`, a sentence: "In that comp, Fade is 21 ahead of Skye, the next best initiator." With fit
+ * numbers off in Settings (`numbers` false), it says the same without the points.
  */
-export function edgeWords(id: string, e: { over: string; by: number }, lead = false): string {
+export function edgeWords(id: string, e: { over: string; by: number }, lead = false, numbers = true): string {
   const name = agentById(id)?.name ?? id, over = agentById(e.over)?.name ?? e.over;
   const role = ROLES.find((r) => r.id === agentById(id)?.role)?.name.toLowerCase() ?? 'agent';
   const n = Math.round(Math.abs(e.by));
+  const by = numbers ? `${n} ` : '';
   if (n === 0) return lead ? `In that comp, ${over} would do about as well as ${name}.` : `about as good as ${over} in their best comp`;
-  if (e.by > 0) return lead ? `In that comp, ${name} is ${n} ahead of ${over}, the next best ${role}.` : `${n} ahead of ${over}, the next best ${role}, in their best comp`;
-  return lead ? `In that comp, ${over} would do ${n} better than ${name}.` : `${over} would do ${n} better in ${name}’s best comp`;
+  if (e.by > 0) return lead ? `In that comp, ${name} is ${by}ahead of ${over}, the next best ${role}.` : `${by}ahead of ${over}, the next best ${role}, in their best comp`;
+  return lead ? `In that comp, ${over} would do ${by}better than ${name}.` : `${over} would do ${by}better in ${name}’s best comp`;
 }
 
 const COUNT = ['no', 'one', 'two', 'three', 'four', 'five'];
@@ -50,10 +52,12 @@ export function askedTitle(q: { map: string; side: string; sites: readonly strin
   return parts.join(', ');
 }
 
-/** "Gold · trio · with Jett · two controllers · against Chamber and Sova". */
+/** "Gold · trio · with Jett · Omen locked in · two controllers · against Chamber and Sova". */
 export function askedLine(q: Query): string {
   const parts = [rankWord(q.rank), partyWord(q.party).toLowerCase()];
   if (q.include.length) parts.push(`with ${names(q.include)}`);
+  // teammates locked in make it another question, so two recent questions that differ only there don't read alike
+  if (q.locked.length) parts.push(`${names(q.locked)} locked in`);
   const roles = ROLES.filter((r) => q.roles[r.id] !== undefined).map((r) => `${COUNT[q.roles[r.id]!]} ${(q.roles[r.id] === 1 ? r.name : r.plural).toLowerCase()}`);
   if (roles.length) parts.push(listJoin(roles));
   // only the first player's own agents (yours, or a party where only you said) read as yours

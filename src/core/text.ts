@@ -16,6 +16,9 @@ export const fold = (s: string): string => squash(
     .toLocaleLowerCase('en-US'),
 );
 
+/** `s` cut to at most `max` UTF-16 units, never leaving half of an emoji or other paired character at the end. */
+export const cut = (s: string, max: number): string => (s.length <= max ? s : s.slice(0, max).replace(/[\uD800-\uDBFF]$/, ''));
+
 /** Text made safe to match literally inside a regular expression ("KAY/O", "A (Heaven)"). */
 export const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 

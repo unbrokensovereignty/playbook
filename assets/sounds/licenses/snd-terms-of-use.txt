@@ -1,0 +1,13 @@
+SND sound files: terms of use (a summary)
+https://snd.dev/
+
+The SND sound files are made by Dentsu's SND project. The full terms are on
+snd.dev; this is what they allow and ask, as read when the files were added.
+
+- The sounds are free to use in personal and commercial work, including
+  inside apps and services, with no permission needed.
+- Selling or sharing the sound files on their own, as they are, is not
+  allowed. They may only be passed on as part of a work that uses them.
+- A sound may not be used as a trademark or a sound logo.
+- Copyright stays with the sound designer and Dentsu.
+- Credit is not required, and is welcome.

@@ -211,3 +211,50 @@ test('Settings: light or dark is applied at once and kept, and a theme of your o
   await expect(html).toHaveAttribute('data-base', 'dark');
   expect(errors).toEqual([]);
 });
+
+// moving on from a scrolled page starts the next one at the top in the same frame, with no glide
+test('a new page, an agent or a map opens at the top at once, even from far down a page', async ({ page, errors }) => {
+  const top = () => page.locator('#main').evaluate((m) => m.scrollTop);
+  const scrollDown = () => page.locator('#main').evaluate((m) => { m.scrollTop = m.scrollHeight; });
+  await open(page, 'help');
+  await scrollDown();
+  expect(await top()).toBeGreaterThan(400);
+  await go(page, 'agents');
+  expect(await top()).toBe(0);
+  await scrollDown();
+  expect(await top()).toBeGreaterThan(400);
+  await page.locator('.agent-card').last().click();
+  await expect(page.locator('.page-head h1')).toBeVisible();
+  expect(await top()).toBe(0);
+  await go(page, 'maps');
+  await scrollDown();
+  await page.locator('.map-tile').last().click();
+  await expect(page.locator('.page-head h1')).toBeVisible();
+  expect(await top()).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('the Agents by map table’s heading says whether it covers the pool or all the maps', async ({ page, errors }) => {
+  await open(page, 'rankings');
+  await page.getByRole('tab', { name: 'Agents by map' }).click();
+  const pool = MAPS.filter((m) => m.pool).length;
+  await expect(page.locator('table.heat thead th .heat-map')).toHaveCount(pool);
+  await expect(page.locator('.rank-where')).toHaveText(/^Every map in the pool, both sides, /);
+  await page.locator('label.toggle', { hasText: `All ${MAPS.length} maps` }).click();
+  await expect(page.locator('table.heat thead th .heat-map')).toHaveCount(MAPS.length);
+  await expect(page.locator('.rank-where')).toHaveText(/^Every map, both sides, /);
+  expect(errors).toEqual([]);
+});
+
+test('Search for a setting that shows only once you’ve chosen your agents goes to Agents you play', async ({ page, errors }) => {
+  await open(page);
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('How well you play them');
+  await expect(page.getByRole('option').first()).toContainText('How well you play them');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#\/settings\/myComfort$/);
+  // the row it lights up is the one to start from, not the sound switch
+  await expect(page.locator('.flash')).toContainText('Agents you play');
+  await expect(page.locator('#k-myAgents')).toBeInViewport();
+  expect(errors).toEqual([]);
+});

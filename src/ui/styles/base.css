@@ -13,6 +13,13 @@
   --r-xl: 20px;
   --r-full: 999px;
 
+  /* text sizes: a caption, secondary text, dense body text in cards and tables, body, and small headings */
+  --fs-xs: 0.78rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 0.94rem;
+  --fs-base: 1rem;
+  --fs-lg: 1.2rem;
+
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -25,11 +32,7 @@
   --dur-quick: 120ms;
   --dur-base: 220ms;
   --dur-page: 320ms;
-  --dur-flip: 450ms;
-  --dur-party: 1200ms;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ease-spring: cubic-bezier(0.34, 1.45, 0.55, 1);
 
   --shadow-1: 0 1px 2px var(--shadow);
   --shadow-2: 0 2px 6px var(--shadow), 0 1px 2px var(--shadow);
@@ -54,7 +57,7 @@ body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 1rem;
+  font-size: var(--fs-base);
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
@@ -67,10 +70,10 @@ body {
 #app { height: 100%; }
 #boot[hidden] { display: none; }
 
-h1, h2, h3, h4 { margin: 0; font-weight: 650; line-height: 1.2; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
 h1 { font-family: var(--font-serif); font-size: 1.85rem; font-weight: 600; letter-spacing: -0.015em; }
 h2 { font-family: var(--font-serif); font-size: 1.3rem; font-weight: 600; }
-h3 { font-size: 1.02rem; }
+h3 { font-size: var(--fs-base); }
 p { margin: 0; }
 a { color: var(--accent-text); text-underline-offset: 2px; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -89,7 +92,7 @@ img, svg { display: block; }
 .muted { color: var(--text2); }
 .faint { color: var(--text3); }
 .center { text-align: center; }
-.small { font-size: 0.875rem; }
+.small { font-size: var(--fs-sm); }
 .serif { font-family: var(--font-serif); }
 .num { font-variant-numeric: tabular-nums; }
 .nowrap { white-space: nowrap; }
@@ -108,13 +111,20 @@ img, svg { display: block; }
 /* ---------------------------------------------------------------- motion settings */
 
 html[data-motion='reduced'] *, html[data-motion='reduced'] *::before, html[data-motion='reduced'] *::after {
-  /* reduced: fades only */
-  animation-name: fade-only !important;
-  /* each one fades in once and quickly: a slow or looping one would otherwise flash on every loop */
-  animation-duration: 240ms !important;
+  /* reduced: what animates fades once and quickly (a slow or looping one would otherwise flash on
+     every loop, and a short one isn't made longer), and transitions keep to opacity and color */
+  animation-duration: var(--dur-quick) !important;
   animation-iteration-count: 1 !important;
   transition-property: opacity, background-color, border-color, color !important;
 }
+/* only what animates at Full fades here. Everything else appears at once, as it does at Full.
+   tests/unit/motion.test.ts checks every animation in the styles is on this list. */
+html[data-motion='reduced'] :is(.scrim, .dialog, .menu.placed, .banner, .spinner, .route.fresh, .throw.flash.fresh),
+html[data-motion='reduced'] .btn.busy::after { animation-name: fade-only !important; }
+/* the highlight on a setting you jumped to is a change of colour with no movement, so it stays */
+html[data-motion='reduced'] .flash .setting-row { animation-name: flash !important; animation-duration: 1.5s !important; }
+/* with motion off, the setting you jumped to is marked for as long as the highlight would run */
+html[data-motion='off'] .flash .setting-row { background: var(--accent-soft); box-shadow: 0 0 0 8px var(--accent-soft); }
 html[data-motion='off'] *, html[data-motion='off'] *::before, html[data-motion='off'] *::after {
   animation: none !important;
   transition: none !important;
@@ -123,11 +133,8 @@ html[data-motion='off'] *, html[data-motion='off'] *::before, html[data-motion='
 @keyframes fade-only { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-/* pop-in and pulse grow with `scale`, so they leave an element's own transform alone (a lifted or pressed tile) */
+/* pop-in grows with `scale`, so it leaves an element's own transform alone (a lifted or pressed tile) */
 @keyframes pop-in { 0% { opacity: 0; scale: 0.92; } 100% { opacity: 1; scale: none; } }
-@keyframes page-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
-@keyframes page-in-back { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
-@keyframes pulse { 0% { scale: 1; } 40% { scale: 1.08; } 100% { scale: 1; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ---------------------------------------------------------------- printing */
@@ -136,7 +143,12 @@ html[data-motion='off'] *, html[data-motion='off'] *::before, html[data-motion='
 #print-sheet { display: none; }
 @page { margin: 12mm; }
 @media print {
+  /* the sheet is always Paper: a dark page would paint its margins dark when backgrounds print */
+  html.printing { color-scheme: light; }
   html.printing, html.printing body { height: auto; min-width: 0; overflow: visible; background: #FFFFFF; }
   html.printing body > :not(#print-sheet) { display: none !important; }
   html.printing #print-sheet { display: block; }
 }
+
+/* small print keeps to the type scale */
+small { font-size: var(--fs-sm); }

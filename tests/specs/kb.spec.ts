@@ -1,4 +1,4 @@
-import { describe, spec, eq, ok, throws } from './harness.ts';
+import { describe, spec, eq, ok, near, throws } from './harness.ts';
 import { AGENTS, agentById, isNew, parseCaps } from '../../src/core/kb/agents.ts';
 import { kitOf, abilityOn, abilityNames, plainText, textParts } from '../../src/core/kb/kits.ts';
 import { MAPS, MECHANICS, POOL, mapById, parseNeeds, calloutLabel } from '../../src/core/kb/maps.ts';
@@ -12,7 +12,7 @@ import { PAIRS, pairOf } from '../../src/core/kb/synergy.ts';
 import { RANKS } from '../../src/core/kb/ranks.ts';
 import { DIMS, DIM_INFO, ROLE_IDS } from '../../src/core/kb/roles.ts';
 import { NEW_AGENTS } from '../../src/core/kb/new-agents.ts';
-import { MAP_WINS, sideShare } from '../../src/core/kb/mapwins.ts';
+import { EARLIER, MAP_WINS, pooled, sideShare } from '../../src/core/kb/mapwins.ts';
 import { inUse } from '../../src/core/settings.ts';
 
 describe('agents', () => {
@@ -302,6 +302,21 @@ describe('ranked play by map', () => {
       }
     }
     eq(sideShare('icebox', 'attack'), undefined);
+  });
+  spec('a map read more than once keeps its reads newest first, and each earlier one counts EARLIER as much as the next', () => {
+    ok(EARLIER > 0 && EARLIER < 1);
+    for (const [map, m] of Object.entries(MAP_WINS)) {
+      ok(m.reads.length >= 1, map);
+      eq(m.on, m.reads[0]!.on, `${map} is dated by its newest read`);
+      for (let i = 1; i < m.reads.length; i++) ok(m.reads[i - 1]!.on > m.reads[i]!.on, `${map}’s reads are newest first`);
+    }
+    // two reads of one agent: 60% of 100 games, then 40% of 200 before that
+    const read = (on: string, win: number, games: number) => ({ on, attack: 50, defense: 50, agents: { sage: [win, games] as const } });
+    const p = pooled([read('2026-11-20', 60, 100), read('2026-11-05', 40, 200)]);
+    const earlier = 200 * EARLIER;
+    near(p.agents.sage![0], (60 * 100 + 40 * earlier) / (100 + earlier), 1e-9, 'the win rate is the games’ mix');
+    eq(p.agents.sage![1], Math.round(100 + earlier), 'the earlier games count EARLIER as much');
+    eq(p.on, '2026-11-20');
   });
 });
 

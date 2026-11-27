@@ -6,6 +6,9 @@
  */
 
 const GAP = 8, EDGE = 8, DELAY = 350;
+/** Once a tooltip has shown, the next one within this long opens at once (moving along a toolbar). */
+const WARM_MS = 400;
+let warmUntil = 0;
 
 type Side = 'above' | 'below' | 'right' | 'left';
 
@@ -41,8 +44,11 @@ function show(el: Element) {
   const text = el.getAttribute('data-tip');
   if (!text || !box || !el.isConnected) return;
   current = el;
+  // straight on from a neighbour's tooltip: it swaps in place with no fade
+  const warm = performance.now() < warmUntil;
   box.textContent = text;
   box.classList.remove('on');
+  box.classList.toggle('instant', warm);
   box.style.left = '0px';
   box.style.top = '0px';
   box.hidden = false;
@@ -52,12 +58,14 @@ function show(el: Element) {
   box.style.top = `${p.y}px`;
   box.dataset.side = p.side;
   // the next frame, so the fade starts from the new place
-  requestAnimationFrame(() => box?.classList.add('on'));
+  if (warm) box.classList.add('on');
+  else requestAnimationFrame(() => box?.classList.add('on'));
 }
 
 function hide() {
   if (timer) { clearTimeout(timer); timer = null; }
   current = null;
+  if (box && !box.hidden) warmUntil = performance.now() + WARM_MS;
   if (box) { box.hidden = true; box.classList.remove('on'); }
 }
 
@@ -76,7 +84,8 @@ export function installTooltips() {
     if (el === current) return;
     hide();
     if (!el || (e as PointerEvent).pointerType === 'touch') return;
-    timer = setTimeout(() => show(el), DELAY);
+    if (performance.now() < warmUntil) show(el);
+    else timer = setTimeout(() => show(el), DELAY);
   });
   document.addEventListener('pointerout', (e) => {
     const el = tipOf(e.target);

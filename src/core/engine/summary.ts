@@ -14,6 +14,7 @@ import { againstWords, type Explanation } from './explain.ts';
 import { jobWords, momentLabel, playFitLabel, type FilledPlay } from './plays.ts';
 import { partyOf, type PartySize } from './query.ts';
 import type { Tip } from './tips.ts';
+import { tierOf } from './weights.ts';
 
 const name = (id: string) => agentById(id)?.name ?? id;
 
@@ -26,7 +27,7 @@ export interface SummaryParts {
   locked?: readonly string[];
   /** The role to ask your random teammates for ("sentinel"), if any. */
   ask?: string;
-  /** For a party, its fit ranks it among parties of its size. */
+  /** For a party's answer on the Planner (with `expected`), its fit ranks it among parties of its size; a saved plan's is its whole team's. */
   fit: number;
   /** For a party, the fit of the team to expect with random teammates. */
   expected?: number;
@@ -35,26 +36,46 @@ export interface SummaryParts {
   /** A play for each side the plan covers: the one chosen on the Plays tab, or the best. */
   plays?: readonly FilledPlay[];
   tips: readonly Tip[];
+  /** Whether fits show as numbers (Settings → Planner); with it off, only tiers are named. Left out, they show. */
+  numbers?: boolean;
 }
 
-/** "Fit 100 among duos": a party's fit ranks it among parties of its size. */
-export const fitWords = (p: Pick<SummaryParts, 'fit' | 'party'>): string =>
-  `Fit ${Math.round(p.fit)}${p.party?.length ? ` among ${partyOf(p.party.length as PartySize).plural}` : ''}`;
+/** "Fit 100 among duos": a party's fit on the Planner ranks it among parties of its size (a saved plan's is its whole team's). */
+export const fitWords = (p: Pick<SummaryParts, 'fit' | 'party' | 'expected'>): string =>
+  `Fit ${Math.round(p.fit)}${p.party?.length && p.expected !== undefined ? ` among ${partyOf(p.party.length as PartySize).plural}` : ''}`;
 
-/** For a duo or trio: the picks for your random teammates, the team to expect if they pick on their own, and the role to ask them for. */
+/**
+ * A plan's fit as it's shown: "Fit 100 among duos", or with fit numbers off in Settings only its
+ * tier, "Tier S", as a comp's row shows it then.
+ */
+export const fitShown = (p: Pick<SummaryParts, 'fit' | 'party' | 'expected' | 'tier' | 'numbers'>): string =>
+  (p.numbers === false ? `Tier ${p.tier}` : fitWords(p));
+
+/**
+ * Any fit in a sentence: "87", or with fit numbers off in Settings, "tier A". The party box, Why
+ * not, Compare, Copy and Print all name a fit this way, so none of them shows a number the
+ * comp rows don't.
+ */
+export const fitValue = (fit: number, numbers = true): string => (numbers ? `${Math.round(fit)}` : `tier ${tierOf(fit)}`);
+
+/** For a solo player, duo or trio: the picks for your random teammates, the team to expect if they pick on their own, and the role to ask them for. */
 export function partyLines(p: SummaryParts): string[] {
   const lines: string[] = [];
   const picks = p.party?.length ? p.team.filter((id) => !p.party!.includes(id) && !p.locked?.includes(id)) : [];
-  if (picks.length) lines.push(`The best picks for your random teammates are ${listJoin(picks.map(name))}.`);
-  if (p.expected !== undefined && picks.length) lines.push(`If they pick on their own, expect a team that fits about ${Math.round(p.expected)} out of 100.`);
-  if (p.ask) lines.push(`Ask your random teammates for ${aWord(p.ask)} first.`);
+  // with teammates locked in, one random teammate can be all that's left to pick
+  const one = picks.length === 1;
+  if (picks.length) lines.push(one ? `The best pick for your random teammate is ${name(picks[0]!)}.` : `The best picks for your random teammates are ${listJoin(picks.map(name))}.`);
+  if (p.expected !== undefined && picks.length) {
+    lines.push(p.numbers === false ? `If they pick on their own, expect a ${fitValue(p.expected, false)} team.` : `If they pick on their own, expect a team that fits about ${fitValue(p.expected)} out of 100.`);
+  }
+  if (p.ask) lines.push(`Ask your random ${one ? 'teammate' : 'teammates'} for ${aWord(p.ask)} first.`);
   return lines;
 }
 
 export function summaryText(p: SummaryParts): string {
   const lines: string[] = [`Playbook: ${p.title}`];
   const yours = !p.party?.length ? '' : p.party.length === 1 ? ` (you play ${name(p.party[0]!)})` : ` (your party plays ${listJoin(p.party.map(name))})`;
-  lines.push(`Comp: ${p.team.map(name).join(', ')}${yours}. ${fitWords(p)}, tier ${p.tier}.`, ...partyLines(p));
+  lines.push(`Comp: ${p.team.map(name).join(', ')}${yours}. ${p.numbers === false ? fitShown(p) : `${fitWords(p)}, tier ${p.tier}`}.`, ...partyLines(p));
   if (p.why.plan) lines.push(p.why.plan);
   const list = (head: string, items: readonly string[]) => {
     if (!items.length) return;
@@ -66,7 +87,7 @@ export function summaryText(p: SummaryParts): string {
   list('Notes', p.why.notes);
   for (const f of p.plays ?? []) {
     const side = p.plays!.length > 1 ? ` on ${f.play.side}` : '';
-    lines.push('', `Play${side}: ${playTitle(f.play)} (${playFitLabel(f.fit).toLowerCase()})`, f.play.about);
+    lines.push('', `Play${side}: ${playTitle(f.play)} (${playFitLabel(f.fit).toLowerCase()})`, ...(f.play.about ? [f.play.about] : []));
     const moments = new Set(f.steps.map((s) => s.when)).size;
     f.steps.forEach((s, i) => {
       // each moment named before its steps, when the play has more than one

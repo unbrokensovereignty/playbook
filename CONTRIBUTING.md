@@ -12,13 +12,13 @@ Playbook isn't open to outside changes, so pull requests aren't accepted. Bug re
 - Each rule lives in one file, listed under [Where things are](#where-things-are). Every number the engine weighs is in `core/engine/weights.ts`, and facts about the game live in `core/kb/`. Screens use these files instead of working anything out again.
 - Reasons come from the score. Pros, cons and notes are read off the same numbers the score uses, so they always agree with the ranking. A new reason goes in `explain.ts`, backed by a number there.
 - Numbers on screen come from constants. If a sentence quotes a rule ("S from 95", "the middle team is 50"), build it from the constant (`TIERS`, `FIT_MID` and the rest, as `ui/pages/help.tsx` does) so the words can't drift from the code.
-- The app only knows its own versions. Code, docs, tests and in-app text mention only versions that have a heading in `CHANGELOG.md` (or the one in `package.json`), and never words that hint at test builds or earlier editions. 0.5.5 is the first public version, and nothing may refer to anything before it. `npm run lint` checks this. (Game patch numbers like 13.08 have two parts, so they're fine.)
+- The app only knows its own versions. Code, docs, tests and in-app text name only versions that have a heading in `CHANGELOG.md` (or the one in `package.json`), so the app never points people at a file they can't get. `npm run lint` checks this. (Game patch numbers like 13.08 have two parts, so they're fine.)
 - Anything read back is sanitized. Stored records, backups and saved questions pass through the sanitizers in `core/saved.ts`, `core/backup.ts` and `core/engine/query.ts`. A new field needs a default in its sanitizer, and then old data just works, with no migration.
 - A new agent's numbers are estimates, kept apart. An agent revealed but too new for real numbers (none right now) lives in `core/kb/new-agents.ts` with `estimate: true`, and the app says so wherever it shows them. The steps to update one are at the top of that file. An agent released after the last pro event (Hush, for now) is a full agent, but pro play counts neither for nor against them (`proKnown` in `core/kb/pro.ts`).
 - Specs run in the browser too. `tests/specs/` is bundled into the app's hidden self-test page (`#/selftest`), so specs can't import Node modules.
 - Tours point at hooks. The guided tours (`ui/tours/list.ts`) light up `data-tour` hooks in the screens, never styling classes. Keep a hook on its thing when you move or restyle it. `tests/unit/tours.test.ts` and `tests/e2e/tours.spec.ts` fail when a hook goes missing or a card covers what it points at.
 - Every change should work in light and dark themes, with the keyboard, at every text size, and with motion set to Reduced or Off.
-- The scenario tests are the engine's referee. After any change to `weights.ts`, `model.ts`, agent numbers or map needs, `npm test` must still pass `tests/unit/scenarios.test.ts` (a sound mix of roles everywhere, comps close to what pros play at Immortal and Radiant, each map's signature agents, easy agents who work alone at Iron, best comps that vary by map, new agents that don't take over, best comps that change a little at a time between ranks), `tests/unit/benchmarks.test.ts` (how close the best comps come to pro comps, low-rank tiers against ranked play, and every reason a comp gives being true) and `tests/unit/questions.test.ts` (hundreds of random questions keep their rules).
+- The scenario tests are the engine's referee. After any change to `weights.ts`, `model.ts`, an agent's numbers or a map's needs, run `npm test`. `tests/unit/scenarios.test.ts` checks that every top comp has a sound mix of roles and that Immortal and Radiant answers stay close to pro comps. `tests/unit/benchmarks.test.ts` measures how near the best comps come to pro play and checks every reason a comp gives, and `tests/unit/questions.test.ts` throws hundreds of random questions at the engine. If one fails, find out why before loosening it.
 
 ## Setup
 
@@ -32,7 +32,7 @@ npm run check                        # should pass on a fresh clone
 npx playwright install chromium      # once, for the browser tests (skip if Chromium is preinstalled)
 ```
 
-If Chromium is already installed somewhere else (a cloud container often has one), point the browser tests at it instead: `PW_CHROMIUM=/path/to/chromium npx playwright test`.
+If Chromium is already installed somewhere else, point the browser tests at it instead: `PW_CHROMIUM=/path/to/chromium npx playwright test`.
 
 ## The everyday loop
 
@@ -77,12 +77,13 @@ Files opened from disk can share saved data with the real app in the same browse
 | Themes | `src/core/theme.ts` (generation, built-ins, theme codes), `src/ui/theme.ts` (applying, switching), `src/ui/pages/themes.tsx` |
 | The Planner's screen | `src/ui/pages/planner.tsx`, `src/ui/planner/` (question, answers, comp, plays, store) |
 | Pages that show many situations (Rankings by map, best maps, best comps) | `src/ui/solved.ts` |
+| The engine's worker and the jobs it runs | `src/ui/engine.ts`, `src/worker/engine.ts`, `src/core/engine/jobs.ts` |
 | Saving, undo, tabs | `src/data/db.ts`, `src/data/backends.ts`, `src/data/tabs.ts`, `src/data/repo.ts`, `src/ui/undo.ts` |
 | The frame, sidebar, search, shortcuts | `src/ui/shell.tsx`, `src/ui/components/palette.tsx` |
 | Shared buttons, fields, dialogs, toasts | `src/ui/components/controls.tsx`, `src/ui/components/overlays.tsx` |
 | Agent and map pickers, the minimap | `src/ui/components/pickers.tsx`, `src/ui/components/minimap.tsx` |
 | Styles | `src/ui/styles/` (base tokens in `base.css`, one file per area) |
-| Sounds | `src/ui/sound.ts` |
+| Sounds | `src/ui/cues.ts` (which recording each cue plays, and how loud), `src/ui/sound.ts` (playing them), `assets/sounds/` (the recordings and their credits) |
 | Icons | `src/ui/icons.tsx`; the game's art through `src/ui/art.tsx` |
 | The in-app guide and About | `src/ui/pages/help.tsx` |
 | What's new in a version | `src/core/whatsnew.ts` |
@@ -167,7 +168,7 @@ Tours are in `src/ui/tours/list.ts`. A step names the page to be on (or stays on
 
 ### Add a sound
 
-Add its name and group to `SOUNDS` in `src/ui/sound.ts` and a case built from the helpers there. Keep it short and quiet. It follows the volume sliders and every sound set.
+Add its name and group to `SOUNDS` in `src/ui/cues.ts`, and give it a recording in each of the three sets in `SETS`: the file's folder and name, and its peak in dBFS (`ffmpeg -i file.mp3 -af volumedetect -f null -` prints it as `max_volume`). A new file goes in its pack's folder under `assets/sounds/` as a mono MP3, credited in `assets/sounds/CREDITS.md`, and a new source needs the owner's go-ahead and a line under Help → About and in `LICENSE`. The level follows from the peak and the cue's group (`levelOf`). Run `tests/unit/sound.test.ts`, then build and run `tests/e2e/sound.spec.ts`, which draws every take in the browser and checks it's heard, doesn't clip and ends in time. Play it with `play('name')` in the same handler that makes the change it belongs to. It follows the volume sliders and every sound set, and the gallery (`#/gallery`) can play it and measure it.
 
 ### Add an icon
 

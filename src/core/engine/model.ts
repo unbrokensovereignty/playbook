@@ -13,8 +13,8 @@ import { PAIRS } from '../kb/synergy.ts';
 import { rulesFor, type ParsedRule } from '../kb/kitfit.ts';
 import { THREATS, type Threat } from '../kb/counters.ts';
 import { MAP_WINS } from '../kb/mapwins.ts';
-import { RADIANT, RANKED_SOURCE } from '../kb/ranked.ts';
-import { BASE, BY_RANK, EXEC, FIT, HARD, MAP_WIN, NEW_WIN_SHARE, PAIR_STEP, PARTY_RANDOM, PARTY_TEAM, RANKED_PULL, RANKED_ROLE, PRO_GAMES, PRO_RISE, RADIANT_WIN, RANK_NEAR, ROLE_COST, ROLE_MIX, SECOND_CONTROLLER, WIN_CAP, WIN_RANKS } from './weights.ts';
+import { ALL_RANKS, BY_RANK as PICKED, RADIANT, RANK_WINS, RANKED_SOURCE } from '../kb/ranked.ts';
+import { BASE, BY_RANK, EXEC, FIT, HARD, MAP_WIN, NEW_WIN_SHARE, PAIR_STEP, PARTY_RANDOM, PARTY_TEAM, RANKED_PULL, RANKED_ROLE, PRO_GAMES, PRO_RISE, RADIANT_WIN, RANK_NEAR, RANK_WIN, ROLE_COST, ROLE_MIX, SECOND_CONTROLLER, WIN_CAP, WIN_RANKS } from './weights.ts';
 
 export type MapPick = string; // a map id, or 'any'
 export type SidePick = Side | 'both';
@@ -62,8 +62,8 @@ export interface Model {
   roleCost: Float64Array;
   /**
    * The parts that make up each agent's own fit, for the explanations. `win` includes `atTop`, the
-   * part from Radiant's own win rates (radiantEdge); `ranked` is the pull toward what players at
-   * Radiant pick (RANKED_PULL).
+   * part from Radiant's own win rates (radiantEdge); `ranked` is the pull toward what ranked players
+   * at the rank pick (RANKED_PULL).
    */
   fitParts: { pro: Float64Array; rank: Float64Array; win: Float64Array; atTop: Float64Array; ranked: Float64Array; comfort?: Float64Array };
   /**
@@ -191,12 +191,64 @@ const mapWin: Record<string, Record<string, number>> = (() => {
 /** How much better (or worse) than usual an agent does on a map in ranked, in points of win rate (0 without numbers). */
 export const mapWinOf = (map: string, id: string): number => mapWin[map]?.[id] ?? 0;
 
+/** A number kept for each rank (by RANKS index, then agent index), at rank `t` (0 Iron to 1 Radiant), between the two nearest ranks. */
+function betweenRanks(rows: readonly Float64Array[], agent: number, t: number): number {
+  const at = RANKS.findIndex((r) => r.t >= t - 1e-9);
+  const hi = Math.max(0, at), lo = Math.max(0, hi - 1);
+  const span = RANKS[hi]!.t - RANKS[lo]!.t;
+  const f = span > 0 ? (t - RANKS[lo]!.t) / span : 1;
+  return rows[lo]![agent]! * (1 - f) + rows[hi]![agent]! * f;
+}
+
 /**
- * How far an agent's ranked win rate is from 50%, in points, as far as it counts (WIN_CAP,
- * NEW_WIN_SHARE): on `map`, with how much better or worse than usual they do there.
+ * How far each agent's ranked win rate at each rank from Iron to Immortal (kb/ranked.ts) is from
+ * their rate across all ranks, in points, as far as it's more than chance (RANK_WIN), by RANKS index
+ * and agent index. Each rank's table and op.gg's across all ranks are moved so their average pick
+ * wins 50%, a rank's counting the agents outside its twenty at their rate across all ranks (as often
+ * as they're picked across all ranks), and the gap is taken between the two, so that the way op.gg
+ * counts games cancels out. An agent outside a rank's twenty gets nothing, and so does every agent at
+ * Radiant, whose own rates count through their own rule (radiantEdge).
  */
-export const winEdge = (a: Agent, map?: string): number =>
-  Math.max(-WIN_CAP, Math.min(WIN_CAP, a.win - 50 + (map ? mapWinOf(map, a.id) : 0))) * (earlyStats(a) ? NEW_WIN_SHARE : 1);
+const rankGap: readonly Float64Array[] = (() => {
+  const all = Object.entries(ALL_RANKS);
+  const mean = all.reduce((t, [, [p, w]]) => t + p * w, 0) / all.reduce((t, [, [p]]) => t + p, 0);
+  const across = (id: string) => ALL_RANKS[id]![1] - mean + 50;
+  return RANKS.map((r) => {
+    const out = new Float64Array(N);
+    if (r.id === 'radiant') return out;
+    const table = RANK_WINS[r.id];
+    const rows = Object.entries(table.agents).filter(([id]) => ALL_RANKS[id] && agentById(id));
+    const listed = rows.reduce((t, [, [p]]) => t + p, 0);
+    const rest = all.filter(([id]) => !table.agents[id]);
+    const restRate = rest.reduce((t, [id, [p]]) => t + p * across(id), 0) / rest.reduce((t, [, [p]]) => t + p, 0);
+    // how much more than 50% the twenty win on average, once the rest are counted at their rate across all ranks
+    const shift = (rows.reduce((t, [, [p, w]]) => t + p * w, 0) + (100 - listed) * restRate - 50 * 100) / listed;
+    for (const [id, [p, w]] of rows) {
+      const games = (p / 100) * table.picks;
+      out[agentById(id)!.index] = (w - shift - across(id)) * (games / (games + RANK_WIN.games));
+    }
+    return out;
+  });
+})();
+
+/**
+ * An agent's ranked win rate at rank `rankT` (0 Iron to 1 Radiant), in percent: their rate across
+ * all ranks (kb/agents.ts), moved by how differently they do at that rank, as far as that's more than
+ * chance (rankGap). The hard kits win less low down, so this is where their cost in ranked results
+ * shows. At Radiant it's the rate across all ranks, since Radiant's own count apart (radiantEdge).
+ */
+export const rankWin = (a: Agent, rankT: number): number => a.win + betweenRanks(rankGap, a.index, rankT);
+
+/** An agent's ranked win rate as a rank's answers count it, taking in its neighbors' games (rankMix). */
+export const rankWinAt = (a: Agent, rank: RankId): number => atRank(rank, (t) => rankWin(a, t));
+
+/**
+ * How far an agent's ranked win rate at rank `rankT` (rankWin) is from 50%, in points, as far as it
+ * counts (WIN_CAP, NEW_WIN_SHARE): on `map`, with how much better or worse than usual they do there.
+ */
+export function winEdge(a: Agent, map?: string, rankT = 1): number {
+  return Math.max(-WIN_CAP, Math.min(WIN_CAP, rankWin(a, rankT) - 50 + (map ? mapWinOf(map, a.id) : 0))) * (earlyStats(a) ? NEW_WIN_SHARE : 1);
+}
 
 /**
  * Radiant's own win rates (kb/ranked.ts), moved so the average pick there wins 50%, as points either
@@ -214,12 +266,47 @@ export const radiantEdge = (id: string): number => radiantWin[id] ?? 0;
 export const radiantShare = (rankT: number): number => Math.max(0, (rankT - rankOf(RADIANT_WIN.from).t) / (1 - rankOf(RADIANT_WIN.from).t));
 
 /**
- * How often players at Radiant pick an agent (kb/ranked.ts), on the same curve as pro picks: as the
- * share of teams with them, −0.3 for an agent hardly anyone there picks. An agent out since those
- * numbers is neutral.
+ * Each agent's share of picks at each rank, by agent index (kb/ranked.ts). The twenty agents picked
+ * most at a rank get the shares the twenty picked most across all ranks have (agents.ts, `pop`), in
+ * their order at that rank, and the rest share what's left evenly; at Radiant, where the shares
+ * themselves are known, they're used as they are. An agent released since those numbers keeps their
+ * share across all ranks.
  */
-export const radiantPickCurve = (a: Agent): number =>
-  a.estimate || a.released >= RANKED_SOURCE.from ? 0 : proCurve(Math.min(100, 5 * (RADIANT[a.id]?.[0] ?? 0)));
+const RANK_SHARES: readonly Float64Array[] = (() => {
+  const counted = AGENTS.filter((a) => a.released < RANKED_SOURCE.from);
+  const sorted = counted.map((a) => a.pop).sort((x, y) => y - x);
+  return RANKS.map((r) => {
+    const out = new Float64Array(AGENTS.length);
+    const list = PICKED[r.id];
+    const rest = sorted.slice(list.length);
+    const tail = rest.length ? rest.reduce((t, x) => t + x, 0) / Math.max(1, counted.length - list.length) : 0;
+    for (const a of AGENTS) {
+      if (!counted.includes(a)) { out[a.index] = a.pop; continue; }
+      const at = list.indexOf(a.id);
+      if (r.id === 'radiant') out[a.index] = RADIANT[a.id]?.[0] ?? Math.min(0.1, tail);
+      else out[a.index] = at >= 0 ? sorted[at]! : tail;
+    }
+    return out;
+  });
+})();
+
+/** An agent's share of picks at rank `t` (0 Iron to 1 Radiant), in percent, between the two nearest ranks. */
+export const pickShareAt = (agent: number, t: number): number => betweenRanks(RANK_SHARES, agent, t);
+
+/**
+ * How often players at rank `rankT` pick an agent in ranked, on the same curve as pro picks: as the
+ * share of teams with them, −0.3 for an agent hardly anyone there picks. Their own rank's picks
+ * (pickShareAt) give way to Radiant's as Radiant's own win rates come in (radiantShare). An agent
+ * out since those numbers is neutral.
+ */
+export function rankedPickCurve(a: Agent, rankT: number): number {
+  if (a.estimate || a.released >= RANKED_SOURCE.from) return 0;
+  const top = radiantShare(rankT);
+  return proCurve(Math.min(100, 5 * ((1 - top) * pickShareAt(a.index, rankT) + top * (RADIANT[a.id]?.[0] ?? 0))));
+}
+
+/** How much what players pick in ranked pulls at a rank (0 Iron to 1 Radiant): from nothing at RANKED_PULL.from to fully at Radiant. */
+export const rankedRise = (rankT: number): number => Math.max(0, (rankT - rankOf(RANKED_PULL.from).t) / (1 - rankOf(RANKED_PULL.from).t));
 
 /**
  * How much of a hard kit's cost (HARD) counts at a rank: all of it at Iron, fading to nothing at
@@ -242,9 +329,9 @@ function agentFit(a: Agent, map: string, rankT: number, teamT = rankT, random = 
   const rank = (1 - teamT) * FIT.solo * (solo - 0.55) - (1 - rankT) * FIT.skill * (a.skill - 0.5) - hard;
   // Radiant's own rates come from ranked games of mostly random teams, so they count as far as the team is random
   const atTop = FIT.win * random * radiantShare(rankT) * radiantEdge(a.id);
-  const win = FIT.win * winShare(rankT) * winEdge(a, map) + atTop;
-  // and what players at the top pick in ranked pulls random teams there the way pro play pulls teams that play together (RANKED_PULL)
-  const ranked = FIT.pro * RANKED_PULL.share * random * radiantShare(rankT) * radiantPickCurve(a);
+  const win = FIT.win * winShare(rankT) * winEdge(a, map, rankT) + atTop;
+  // and what players at the rank pick in ranked pulls random teams the way pro play pulls teams that play together (RANKED_PULL)
+  const ranked = FIT.pro * RANKED_PULL.share * random * rankedRise(rankT) * rankedPickCurve(a, rankT);
   return { pro, rank, win, atTop, ranked };
 }
 

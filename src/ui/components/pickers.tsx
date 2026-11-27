@@ -58,7 +58,7 @@ export interface AgentPickOptions {
 
 /** Asks for a set of agents, starting from `chosen`. Resolves to the new set, or undefined if cancelled. */
 export function pickAgents(chosen: readonly string[], o: AgentPickOptions): Promise<string[] | undefined> {
-  return openDialog<string[]>(o.title, (close) => <AgentPicker chosen={chosen} o={o} close={close} />, { wide: true });
+  return openDialog<string[]>(o.title, (close) => <AgentPicker chosen={chosen} o={o} close={close} />, { wide: true, holds: true });
 }
 
 function AgentPicker({ chosen, o, close }: { chosen: readonly string[]; o: AgentPickOptions; close: (v?: string[]) => void }) {
@@ -70,10 +70,9 @@ function AgentPicker({ chosen, o, close }: { chosen: readonly string[]; o: Agent
     return f ? AGENTS_BY_NAME.filter((a) => fold(a.name).includes(f) || a.role.includes(f)) : AGENTS_BY_NAME;
   }, [search]);
   const toggle = (id: string) => {
-    play('tick');
-    if (picked.includes(id)) setPicked(picked.filter((x) => x !== id));
-    else if (max === 1) setPicked([id]);
-    else if (picked.length < max) setPicked([...picked, id]);
+    if (picked.includes(id)) { play('unpick'); setPicked(picked.filter((x) => x !== id)); }
+    else if (max === 1) { play('pick'); setPicked([id]); }
+    else if (picked.length < max) { play('pick'); setPicked([...picked, id]); }
   };
   const full = max > 1 && picked.length >= max;
   return (
@@ -126,7 +125,7 @@ export function AgentChips({ ids, onChange, o, empty }: { ids: readonly string[]
           <span key={id} class="agent-chip">
             <AgentIcon id={id} size={24} />
             <span>{a?.name ?? id}</span>
-            <button type="button" aria-label={`Remove ${a?.name ?? id}`} data-tip="Remove" onClick={() => { play('tick'); onChange(ids.filter((x) => x !== id)); }}>
+            <button type="button" aria-label={`Remove ${a?.name ?? id}`} data-tip="Remove" onClick={() => { play('unpick'); onChange(ids.filter((x) => x !== id)); }}>
               <Icon name="x" size={14} />
             </button>
           </span>

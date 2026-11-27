@@ -11,10 +11,12 @@ import { DIM_INFO } from '../../core/kb/roles.ts';
 import { explainTeam, whyBelow } from '../../core/engine/explain.ts';
 import { answerModel, type SituationAnswer } from '../../core/engine/plan.ts';
 import { playFitLabel, playsFor } from '../../core/engine/plays.ts';
+import { fitValue } from '../../core/engine/summary.ts';
+import { tierOf } from '../../core/engine/weights.ts';
 import { listJoin } from '../../core/text.ts';
 import { Bar, Select } from '../components/controls.tsx';
 import { DialogLayout } from '../components/overlays.tsx';
-import { openDialog } from '../state.ts';
+import { openDialog, useSettings } from '../state.ts';
 import { Fit, TeamIcons } from './comp.tsx';
 import { askedTitle } from './words.ts';
 
@@ -28,6 +30,7 @@ export function compareComps(ans: SituationAnswer, i: number): Promise<unknown> 
 function Compare({ ans, first, close }: { ans: SituationAnswer; first: number; close: () => void }) {
   const [left, setLeft] = useState(first);
   const [right, setRight] = useState(first === 0 ? 1 : 0);
+  const numbers = useSettings().showNumbers;
   const s = ans.situation;
   const m = answerModel(ans);
   const options = ans.comps.map((c, i) => [String(i), `${i + 1}. ${c.team.map((id) => agentById(id)?.name ?? id).join(', ')}`] as const);
@@ -82,7 +85,11 @@ function Compare({ ans, first, close }: { ans: SituationAnswer; first: number; c
         <div class="why-not">
           <p>
             The {lo === 0 ? 'first' : 'second'} comp plays {names(below.in)} instead of {names(below.out)}
-            {Math.round(shown[lo]!.fit) >= Math.round(shown[hi]!.fit) ? ', and fits as well.' : <>, and fits <span class="num">{Math.round(shown[lo]!.fit)}</span> against <span class="num">{Math.round(shown[hi]!.fit)}</span>.</>}
+            {Math.round(shown[lo]!.fit) >= Math.round(shown[hi]!.fit) ? ', and fits as well.'
+              : numbers ? <>, and fits <span class="num">{fitValue(shown[lo]!.fit)}</span> against <span class="num">{fitValue(shown[hi]!.fit)}</span>.</>
+              // with fit numbers off in Settings, the tiers instead (fitValue), as the rows show them
+              : tierOf(shown[lo]!.fit) === tierOf(shown[hi]!.fit) ? `, and is ${fitValue(shown[lo]!.fit, false)} too.`
+              : `, and is ${fitValue(shown[lo]!.fit, false)} where the ${hi === 0 ? 'first' : 'second'} is ${fitValue(shown[hi]!.fit, false)}.`}
           </p>
           {below.loses.length > 0 && <div><span class="muted small">Where it falls short</span><ul class="reasons">{below.loses.map((x) => <li key={x}>{x}</li>)}</ul></div>}
           {below.gains.length > 0 && <div><span class="muted small">Where it’s better</span><ul class="reasons">{below.gains.map((x) => <li key={x}>{x}</li>)}</ul></div>}

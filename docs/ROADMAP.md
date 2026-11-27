@@ -1,6 +1,6 @@
 # Roadmap
 
-What's planned for Playbook. Items marked **proposed** wait for Sovereign's OK before they're built, and small fixes don't need to be listed here. What each version changed is in `CHANGELOG.md`.
+What's planned for Playbook. Items marked proposed wait for Sovereign's OK before they're built, and small fixes don't need to be listed here. What each version changed is in `CHANGELOG.md`.
 
 ## Keeping the numbers current
 

@@ -83,7 +83,7 @@ function ThemeEditor({ initial, close }: { initial: ThemePicks; close: (v?: unkn
   return (
     <div onKeyDown={(e) => { if (e.key === 'Escape' && !dirty) { e.stopPropagation(); close(); } }}>
       <DialogLayout title={initial.id ? 'Edit theme' : 'New theme'} icon="palette" close={() => close()} foot={<>
-        <Button kind="quiet" icon="shuffle" class="mr-auto" onClick={() => { play('tick'); const x = shuffled(t.base); setGradient(!!x.bg2); set(x); }}>Shuffle</Button>
+        <Button kind="quiet" icon="shuffle" class="mr-auto" onClick={() => { const x = shuffled(t.base); setGradient(!!x.bg2); set(x); }}>Shuffle</Button>
         <CancelButton onClick={() => close()} />
         <Button kind="primary" onClick={save}>Save theme</Button>
       </>}>

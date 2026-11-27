@@ -1,10 +1,8 @@
 /**
- * Study days. A study day runs from the day-start hour (4 AM by default) to the same hour the next
- * morning, in local time, so a session at 1 AM still counts toward the evening before.
- *
- * Days are identified by a key "YYYY-MM-DD" (the calendar date the study day starts on). All
- * arithmetic on keys goes through calendar dates, never through "+ 24 hours", so it stays right
- * across daylight-saving changes.
+ * Calendar days in local time, keyed "YYYY-MM-DD". A day can be set to start at a later hour
+ * (`startHour`), so a game at 1 AM still counts toward the evening before. Playbook itself starts
+ * days at midnight. All arithmetic on keys goes through calendar dates, never through "+ 24 hours",
+ * so it stays right across daylight-saving changes.
  */
 import { DAY } from './util.ts';
 
@@ -25,18 +23,18 @@ function parts(k: DayKey): [number, number, number] {
   return k.split('-').map(Number) as [number, number, number];
 }
 
-/** The study day that time `ts` belongs to. */
+/** The day that time `ts` belongs to. */
 export function dayKey(ts: number, startHour: number): DayKey {
   const d = new Date(ts);
   if (d.getHours() < startHour) {
-    // before the day-start hour: still yesterday's study day
+    // before the start hour: still yesterday
     const y = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1, 12);
     return keyOf(y);
   }
   return keyOf(d);
 }
 
-/** When study day `k` begins (local time). */
+/** When day `k` begins (local time). */
 export function dayStart(k: DayKey, startHour: number): number {
   const [y, m, d] = parts(k);
   return new Date(y, m - 1, d, startHour, 0, 0, 0).getTime();

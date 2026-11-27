@@ -3,7 +3,7 @@
  * cons and strengths), the plays it can run, and tips. A duo or trio's row shows your party first
  * and the best agents for your random teammates after it.
  */
-import { useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { agentById } from '../../core/kb/agents.ts';
 import { mapById, type Side } from '../../core/kb/maps.ts';
 import { DIM_INFO, ROLES } from '../../core/kb/roles.ts';
@@ -11,12 +11,12 @@ import { againstWords, explainFor, explainTeam, swapLine, type AgainstRow, type 
 import { answerModel, type CompAnswer, type SituationAnswer } from '../../core/engine/plan.ts';
 import { playsFor, type FilledPlay } from '../../core/engine/plays.ts';
 import { partyOf, type PartySize, type Query } from '../../core/engine/query.ts';
-import { chatText, summaryText } from '../../core/engine/summary.ts';
+import { chatText, fitValue, summaryText } from '../../core/engine/summary.ts';
 import { tipsFor } from '../../core/engine/tips.ts';
 import { listJoin } from '../../core/text.ts';
 import { articleOf, capitalize } from '../../core/util.ts';
 import { AgentIcon } from '../art.tsx';
-import { Bar, Button, Tabs } from '../components/controls.tsx';
+import { Bar, Button, Tabs, tabIdOf } from '../components/controls.tsx';
 import { openMenu, prompt } from '../components/overlays.tsx';
 import { copyWithToast, printSheet } from '../files.ts';
 import { Icon } from '../icons.tsx';
@@ -24,8 +24,10 @@ import { data, go, safely, toast, useSettings } from '../state.ts';
 import { play } from '../sound.ts';
 import { tourHook } from '../tours/now.ts';
 import { PlaysPanel } from './plays.tsx';
+import { useMyPlays } from '../myplays.ts';
 import { PlanSheet, type SheetParts } from './sheet.tsx';
-import { askedLine, askedTitle, howOften } from './words.ts';
+import { askedLine, askedTitle, howOften, mapWord } from './words.ts';
+import { LIMITS } from '../../core/saved.ts';
 
 const nameOf = (id: string) => agentById(id)?.name ?? id;
 
@@ -62,6 +64,27 @@ export function TeamIcons({ team, party = [], locked = [], size = 40 }: { team: 
   );
 }
 
+/** The row head just clicked, and where it was on screen. One row is open at a time, so opening one closes
+ * the one above it, which would pull the clicked head up by that row's height (often off the top of the
+ * window). The page scrolls back by as much before the frame is drawn, so the head stays under the pointer. */
+let held: { el: HTMLElement; top: number } | null = null;
+export const holdInPlace = (el: HTMLElement) => {
+  const h = held = { el, top: el.getBoundingClientRect().top };
+  // a click that changes no row (the first comp held open by a tour) mustn't leave a hold for a later change to use
+  requestAnimationFrame(() => { if (held === h) held = null; });
+};
+export function useHeldInPlace(dep: unknown) {
+  useLayoutEffect(() => {
+    const h = held;
+    if (!h) return;
+    held = null;
+    if (!h.el.isConnected) return;
+    const d = h.el.getBoundingClientRect().top - h.top;
+    const box = h.el.closest<HTMLElement>('.main');
+    if (box && Math.abs(d) >= 1) box.scrollBy({ top: d, behavior: 'instant' as ScrollBehavior });
+  }, [dep]);
+}
+
 export function CompRow({ c, i, ans, q, open, onToggle, onCompare }: { c: CompAnswer; i: number; ans: SituationAnswer; q: Query; open: boolean; onToggle: () => void; onCompare?: () => void }) {
   const party = c.party;
   const names = party.length
@@ -71,9 +94,10 @@ export function CompRow({ c, i, ans, q, open, onToggle, onCompare }: { c: CompAn
   // for a five-stack, what sets the comp apart from the best one, read off the same score
   const best = ans.comps[0];
   const swap = i > 0 && best && !party.length ? swapLine(answerModel(ans), best.team, c.team) : '';
+  useHeldInPlace(open);
   return (
     <li class={`comp${open ? ' open' : ''}`}>
-      <button type="button" class="comp-head" data-tour={i === 0 ? 'comp-first' : undefined} aria-expanded={open} aria-controls={id} onClick={() => { play(open ? 'close' : 'open'); onToggle(); }}>
+      <button type="button" class="comp-head" data-tour={i === 0 ? 'comp-first' : undefined} aria-expanded={open} aria-controls={id} onClick={(e) => { play(open ? 'close' : 'open'); holdInPlace(e.currentTarget); onToggle(); }}>
         <span class="comp-rank num">{i + 1}</span>
         <TeamIcons team={c.team} party={party} locked={q.locked} />
         <span class="comp-names"><span class="comp-team">{names}</span>{swap && <span class="comp-swap">{swap}</span>}</span>
@@ -95,6 +119,8 @@ type Tab = 'why' | 'plays' | 'tips';
 export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: { c: CompAnswer; i: number; ans: SituationAnswer; q: Query; saveable?: boolean; plan?: { name: string; note: string }; onCompare?: () => void }) {
   const [chosen, setTab] = useState<Tab>('why');
   const numbers = useSettings().showNumbers;
+  // the plays you drew on this map, which the Plays tab ranks among the built-in ones
+  const mine = useMyPlays(ans.situation.map);
   // the play on show on the Plays tab for each side, and the team it was for: a copied or printed plan carries it
   const shown = useRef<Partial<Record<Side, { team: string; f: FilledPlay }>>>({});
   // a tour step about the pros and cons or the strengths shows them
@@ -103,10 +129,13 @@ export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: {
   const why = explainTeam(answerModel(ans), c.team, explainFor(q, c));
   const tips = tipsFor(c.team, s, q.party, c.party, q.locked.length);
   const save = async () => {
-    const name = await prompt({ title: 'Save this plan', label: 'Name', yes: 'Save', value: `${askedTitle(s)}: ${c.team.map(nameOf).join(', ')}`.slice(0, 60), maxLength: 60 });
+    // the fullest name that fits, so it's never cut off part way through a word
+    const names = c.team.map(nameOf).join(', ');
+    const suggest = [`${askedTitle(s)}: ${names}`, `${mapWord(s.map)}: ${names}`, names].find((x) => x.length <= LIMITS.name) ?? names.slice(0, LIMITS.name);
+    const name = await prompt({ title: 'Save this plan', label: 'Name', yes: 'Save', value: suggest, maxLength: LIMITS.name });
     if (!name) return;
     // the plan keeps this situation, even when the question asked for the best map, side or rank
-    const saved = safely(() => data().savePlan({ name, query: { ...q, map: s.map, side: s.side, rank: s.rank, sites: [...s.sites] }, team: c.team }));
+    const saved = safely(() => data().savePlan({ name, query: { ...q, map: s.map, side: s.side, rank: s.rank, sites: [...s.sites] }, team: c.team, party: c.party }));
     if (saved) { play('saved'); toast(`Saved “${saved.name}”.`, { tone: 'good', undo: true, action: { label: 'Open', run: () => go('saved', saved.id) } }); }
     else if (saved === null) toast('There are too many saved plans. Delete some on the Saved page first.', { tone: 'bad' });
   };
@@ -117,7 +146,7 @@ export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: {
     const plays = sides.map((side) => {
       const seen = shown.current[side];
       if (seen && seen.team === c.team.join() && (!map || seen.f.play.map === map.id)) return seen.f;
-      return map ? playsFor(c.team, map.id, side, s.sites, false, [], s.rank)[0] : undefined;
+      return map ? playsFor(c.team, map.id, side, s.sites, false, mine, s.rank)[0] : undefined;
     }).filter((f) => !!f);
     const ask = asksFor(c, i, ans)[0];
     const heading = askedTitle(s), line = askedLine({ ...q, rank: s.rank });
@@ -136,7 +165,7 @@ export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: {
   return (
     <>
       <div class="row-between comp-tools" data-tour="comp-tools">
-        <Tabs<Tab> label="About this comp" value={tab} onChange={setTab} tabs={[['why', 'Pros and cons'], ['plays', 'Plays'], ['tips', 'Tips']]} />
+        <Tabs<Tab> label="About this comp" name={`comp ${i} ${c.team.join(' ')}`} value={tab} onChange={setTab} tabs={[['why', 'Pros and cons'], ['plays', 'Plays'], ['tips', 'Tips']]} />
         <div class="row">
           <Button size="sm" icon="copy" menu onClick={copy}>Copy</Button>
           <Button size="sm" icon="print" onClick={print}>Print</Button>
@@ -144,9 +173,10 @@ export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: {
           {saveable && <Button size="sm" icon="bookmark" kind="soft" onClick={() => void save()}>Save plan</Button>}
         </div>
       </div>
+      <div class="comp-tab" role="tabpanel" aria-labelledby={tabIdOf(`comp ${i} ${c.team.join(' ')}`, tab)}>
       {tab === 'why' && <>
         {why.plan && <p class="comp-plan" data-tour="comp-plan"><Icon name="target" size={18} /><span><b>How it wins.</b> {why.plan}</span></p>}
-        {c.party.length > 0 && <PartyBox c={c} i={i} ans={ans} locked={q.locked} />}
+        {c.party.length > 0 && c.expected !== undefined && <PartyBox c={c} i={i} ans={ans} locked={q.locked} />}
         {why.against.length > 0 && <Against rows={why.against} />}
         <div class="pros-cons" data-tour="comp-reasons">
           <div>
@@ -167,6 +197,7 @@ export function CompDetail({ c, i, ans, q, saveable = true, plan, onCompare }: {
           {tips.map((t) => <li key={t.about + t.text}><b>{t.about}</b><span>{t.text}</span></li>)}
         </ul>
       )}
+      </div>
     </>
   );
 }
@@ -182,23 +213,35 @@ function PartyBox({ c, i, ans, locked }: { c: CompAnswer; i: number; ans: Situat
   // the places your random teammates pick, and the agents in them
   const open = (id: string) => !c.party.includes(id) && !locked.includes(id);
   const picks = c.team.filter(open);
+  // with teammates locked in, one random teammate can be all that's left to pick
+  const one = picks.length === 1;
   const yours = c.party.length === 1 ? <>You play <b>{nameOf(c.party[0]!)}</b>.</> : <>Your party plays <b>{listJoin(c.party.map(nameOf))}</b>.</>;
+  // with fit numbers off in Settings, each fit is named by its tier (fitValue), as the comp rows show it
+  const numbers = useSettings().showNumbers;
+  const shown = (fit: number) => (numbers ? <b class="num">{fitValue(fit)}</b> : <b>{fitValue(fit, false)}</b>);
+  const chip = (fit: number) => <span class="muted num">{numbers ? `fit ${fitValue(fit)}` : capitalize(fitValue(fit, false))}</span>;
   return (
     <div class="party-box">
       {picks.length > 0 ? (
-        <p>
-          {yours} If your random teammates play {listJoin(picks.map(nameOf))}, the team fits <b class="num">{Math.round(c.pickFit ?? expected)}</b> out of 100
-          (the best five-stack is 100). If they pick on their own, expect a team that fits about <b class="num">{Math.round(expected)}</b>, give or take {Math.round(c.spread ?? 0)}.
-        </p>
+        numbers ? (
+          <p>
+            {yours} If your random {one ? 'teammate plays' : 'teammates play'} {listJoin(picks.map(nameOf))}, the team fits {shown(c.pickFit ?? expected)} out of 100
+            (the best five-stack is 100). If they pick on their own, expect a team that fits about {shown(expected)}, give or take {Math.round(c.spread ?? 0)}.
+          </p>
+        ) : (
+          <p>
+            {yours} If your random {one ? 'teammate plays' : 'teammates play'} {listJoin(picks.map(nameOf))}, the team is {shown(c.pickFit ?? expected)}. If they pick on their own, expect a {shown(expected)} team.
+          </p>
+        )
       ) : (
         <p>
-          {yours} With the agents your teammates locked in, the team fits <b class="num">{Math.round(expected)}</b> out of 100 (the best five-stack is 100).
+          {yours} With the agents your teammates locked in, the team {numbers ? <>fits {shown(expected)} out of 100 (the best five-stack is 100)</> : <>is {shown(expected)}</>}.
         </p>
       )}
       {ask.length > 0 && (
         <p>
-          Ask your teammates for {articleOf(role(ask[0]!.role))} <b>{role(ask[0]!.role)}</b> first. They pick one on their own {howOften(ask[0]!.chance)}, and with one, expect about <span class="num">{Math.round(ask[0]!.fit)}</span>.
-          {ask[1] && <> {capitalize(articleOf(role(ask[1].role)))} <b>{role(ask[1].role)}</b> helps next (<span class="num">{Math.round(ask[1].fit)}</span>).</>}
+          Ask your {one ? 'teammate' : 'teammates'} for {articleOf(role(ask[0]!.role))} <b>{role(ask[0]!.role)}</b> first. They pick one on their own {howOften(ask[0]!.chance)}, and with one, expect {numbers ? <>about <span class="num">{fitValue(ask[0]!.fit)}</span></> : <>a {fitValue(ask[0]!.fit, false)} team</>}.
+          {ask[1] && <> {capitalize(articleOf(role(ask[1].role)))} <b>{role(ask[1].role)}</b> helps next ({numbers ? <span class="num">{fitValue(ask[1].fit)}</span> : fitValue(ask[1].fit, false)}).</>}
         </p>
       )}
       {!!c.others?.length && (
@@ -207,7 +250,7 @@ function PartyBox({ c, i, ans, locked }: { c: CompAnswer; i: number; ans: Situat
           {c.others.map((o) => (
             <span key={o.team.join()} class="row party-team">
               <TeamIcons team={o.team.filter(open)} size={28} />
-              <span class="muted num">fit {Math.round(o.fit)}</span>
+              {chip(o.fit)}
             </span>
           ))}
         </div>
@@ -217,7 +260,7 @@ function PartyBox({ c, i, ans, locked }: { c: CompAnswer; i: number; ans: Situat
           <span class="muted">If they pick on their own, most likely</span>
           <span class="row party-team">
             <TeamIcons team={c.likely.team.filter(open)} size={28} />
-            <span class="muted num">fit {Math.round(c.likely.fit)}</span>
+            {chip(c.likely.fit)}
           </span>
         </div>
       )}
@@ -257,7 +300,7 @@ function Strengths({ rows }: { rows: readonly StrengthRow[] }) {
             <tr key={r.dim}>
               <th scope="row" data-tip={DIM_INFO[r.dim].blurb}>{DIM_INFO[r.dim].name}</th>
               <td><span class="need">{r.need >= 1.4 ? 'A lot' : r.need >= 1 ? 'Some' : 'A little'}</span></td>
-              <td><Bar value={r.cover} size="thin" tone={r.cover >= 0.8 ? 'good' : undefined} label={`${DIM_INFO[r.dim].name} covered`} /></td>
+              <td><Bar value={r.cover} size="thin" label={`${DIM_INFO[r.dim].name} covered`} /></td>
               <td class="by">{r.by.length ? r.by.slice(0, 3).map((b) => nameOf(b.id) + (b.abilities.length ? ` (${listJoin(b.abilities)})` : '')).join(', ') : <span class="faint">Nobody</span>}</td>
             </tr>
           ))}

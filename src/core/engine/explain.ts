@@ -9,13 +9,13 @@ import { PLURAL_ABILITIES, abilityNames, kitOf } from '../kb/kits.ts';
 import { mapById, parseNeeds, type Side } from '../kb/maps.ts';
 import { MAP_WINS } from '../kb/mapwins.ts';
 import { PRO, proOverlap } from '../kb/pro.ts';
-import { RADIANT } from '../kb/ranked.ts';
+import { RADIANT, RANK_WINS } from '../kb/ranked.ts';
 import { RANK_IDS, rankOf } from '../kb/ranks.ts';
 import { DIMS, DIM_INFO, ROLE_IDS, roleOf, type Dim, type Role } from '../kb/roles.ts';
 import { pairOf } from '../kb/synergy.ts';
 import { escapeRegExp, listJoin } from '../text.ts';
-import { D, N, atRank, kitShare, needsFor, viaIn, type Model, type Situation } from './model.ts';
-import { BELOW_NOTE, COMFORT, KIT_NOTE, KIT_RULE_NOTE, MIX_NOTE, OPERATOR_NOTE, PLAN_NOTE, PLAY_RANK, SECOND_CONTROLLER, THREAT_NOTE, WIN_NOTE } from './weights.ts';
+import { D, N, atRank, kitShare, needsFor, rankWinAt, viaIn, type Model, type Situation } from './model.ts';
+import { BELOW_NOTE, COMFORT, KIT_NOTE, KIT_RULE_NOTE, MIX_NOTE, OPERATOR_NOTE, PLAN_NOTE, PLAY_RANK, SECOND_CONTROLLER, SOURCE_NOTE, THREAT_NOTE, WIN_NOTE } from './weights.ts';
 import { ruleWhy } from '../kb/kitfit.ts';
 import { threatLine } from '../kb/counters.ts';
 
@@ -117,10 +117,14 @@ const MAKE_UP: Record<Dim, Advice | { attack: Advice; defense: Advice; both: Adv
  * situation, so one answer reads the same on every visit while two answers don't read word for word alike.
  */
 function wordsFor(w: Words, key: string): string {
-  if (typeof w === 'string') return w;
+  return typeof w === 'string' ? w : pickFor(w, key);
+}
+
+/** One of a few choices, the same one every time for the same key (see wordsFor). */
+function pickFor<T>(xs: readonly T[], key: string): T {
   let h = 2166136261;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
-  return w[(h >>> 0) % w.length]!;
+  return xs[(h >>> 0) % xs.length]!;
 }
 
 /** How much of a strength a team needs before advice can lean on it: the most a "few" gap covers. */
@@ -140,11 +144,16 @@ const ROLE_GAP: Record<Role, { none: string; so?: string; dims: readonly Dim[]; 
   sentinel: { none: 'nobody watches the flank or holds a site alone', dims: ['anchor', 'flank'], many: 'make the team slow to take space' },
 };
 
+/** What having none of a role costs a team, as the cons say it: "nobody watches the flank or holds a site alone". */
+export const noneOf = (r: Role): string => ROLE_GAP[r].none;
+
 /**
  * A pro for a strength the comp has plenty of: what the agents who bring it do, after their names
  * or abilities ("Omen’s Dark Cover gives the team all the smokes it needs"), for one and for more.
+ * A strength nearly every comp has (firepower) has a few ways to say it, each `one` matching the
+ * `many` in the same place.
  */
-export const STRONG: Record<Dim, { one: string; many: string }> = {
+export const STRONG: Record<Dim, { one: Words; many: Words }> = {
   smoke: { one: 'gives the team all the smokes it needs', many: 'give the team all the smokes it needs' },
   wall: { one: 'cuts off the long sightlines', many: 'cut off the long sightlines' },
   flash: { one: 'flashes the team into its fights', many: 'flash the team into its fights' },
@@ -158,10 +167,24 @@ export const STRONG: Record<Dim, { one: string; many: string }> = {
   retake: { one: 'takes a planted site back', many: 'take a planted site back' },
   postplant: { one: 'stops a defuse from a distance', many: 'stop a defuse from a distance' },
   sustain: { one: 'keeps players in the round', many: 'keep players in the round' },
-  duel: { one: 'wins plenty of fights alone', many: 'win plenty of fights alone' },
+  duel: {
+    one: ['wins plenty of fights alone', 'can take a duel without help', 'wins duels without the team’s help'],
+    many: ['win plenty of fights alone', 'can each take a duel without help', 'win duels without the team’s help'],
+  },
   angles: { one: 'holds the long angles', many: 'hold the long angles' },
   mobility: { one: 'gets the team where it needs to be, fast', many: 'get the team where it needs to be, fast' },
 };
+
+/** Every way a pro can say a strength, for one agent and for more (see STRONG). */
+export const strongForms = (d: Dim): string[] => [STRONG[d].one, STRONG[d].many].flat();
+
+/** A strength's pro words for one agent or more, the same form every time for the same key. */
+function strongWords(d: Dim, many: boolean, key: string): string {
+  const { one, many: more } = STRONG[d];
+  if (typeof one === 'string' || typeof more === 'string') return (many ? more : one) as string;
+  const i = pickFor(one.map((_, k) => k), key);
+  return (many ? more : one)[i]!;
+}
 
 const nameOf = (a: Agent) => a.name;
 const sideWord = (s: Side) => (s === 'attack' ? 'attack' : 'defense');
@@ -342,6 +365,28 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     if (row.cover < LEANS_ON || !row.by.length) return wordsFor(lean.or, `${key}|${d}`);
     return wordsFor(lean.text, `${key}|${d}`).replace('{with}', abilityOf(m, agentById(row.by[0]!.id)!, lean.with));
   };
+  // who brings a strength the comp is short of, said one of a few ways (the same way for the same
+  // comp), each naming every source; the sentence ends on them, and the advice gets one of its own.
+  // `values` is what each source brings, as the score counts it, so one that brings most of it
+  // (each of the others at most SOURCE_NOTE.main of what it does) can be called the main one
+  const pluralIn = (item: string) => item.includes(' and ') || [...PLURAL_ABILITIES].some((n) => item.endsWith(n));
+  const sourcesOf = (d: Dim, items: readonly string[], values: readonly number[]): string => {
+    const info = DIM_INFO[d], list = joinGroups(items), many = items.length > 1 || pluralIn(items[0]!);
+    const leads = [
+      `${capital(info.has)} ${info.few ? 'come' : 'comes'} only from ${list}`,
+      `Only ${list} ${many ? 'bring' : 'brings'} ${info.has}`,
+      `${capital(info.has)} ${info.few ? 'rest' : 'rests'} on ${list}`,
+    ];
+    // ("all the utility to clear corners this comp has" runs on too long, and "all the flashes" needs more than one)
+    if (!info.unnamed && !info.has.startsWith('utility ') && (many || !info.few)) leads.push(`${list} ${many ? 'are' : 'is'} all the ${info.has} this comp has`);
+    // (only a source that brings some is the main one, or "a little": an ability that does a plain
+    // strength is named in the other leads however little the numbers make of it, even nothing)
+    const little = items.filter((_, i) => i > 0 && values[i]! > 0);
+    if (values[0]! > 0 && little.length && values.slice(1).every((v) => v <= SOURCE_NOTE.main * values[0]!)) {
+      leads.push(`${items[0]} ${pluralIn(items[0]!) ? 'are' : 'is'} the main source of ${info.has} here, with a little from ${joinGroups(little)}`);
+    }
+    return wordsFor(leads, `${key}|${d}|from`);
+  };
   // how to play a role most pro teams on the map play without (see MIX_SHARE): a sentinel's setup
   // frees the rest of the team, and with two of them, one of them plays with the rest
   const aroundMix = (r: Role, c: number): string => {
@@ -461,11 +506,11 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     const many = who.length > 1 || who[0]?.plural;
     // the map is named once: three pros in a row that each end on it read as a formula
     const rewarded = bump(row.dim) >= 0.15 && !saidMap.pro
-      ? wordsFor([`, which ${where} rewards`, `, and ${where} rewards that`, `, which counts for a lot on ${where}`, `, which pays off on ${where}`], `${key}|${row.dim}|map`)
+      ? wordsFor([`, and ${where} asks for more of that than most maps`, `, which ${where} calls for more than most maps do`], `${key}|${row.dim}|map`)
       : '';
     if (rewarded) saidMap.pro = true;
     // when nobody brings much of it alone, it's the team together that does
-    if (who.length) praise(`${listJoin(who.map((w) => w.words))} ${many ? STRONG[row.dim].many : STRONG[row.dim].one}${rewarded}.`);
+    if (who.length) praise(`${listJoin(who.map((w) => w.words))} ${strongWords(row.dim, !!many, `${key}|${row.dim}|strong`)}${rewarded}.`);
     else if (self) praise(`${self.words} ${SELF_HEAL} ${self.self}${rewarded}.`);
     else praise(`Between them, the team has plenty of ${DIM_INFO[row.dim].has}${rewarded}.`);
   }
@@ -476,19 +521,22 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     // as having none, nor as having more than it does ("only Omen’s Paranoia"); for a plain strength
     // that's everyone with an ability that does it, however little the numbers make of it
     const j = DIMS.indexOf(row.dim), brings = (a: Agent) => 1 - m.miss[a.index * D + j]!;
-    const some = team.filter((a) => brings(a) > 1e-9 || plainKeys(a.id, row.dim)).sort((a, b) => brings(b) - brings(a))
-      .slice(0, PLAIN.has(row.dim) ? undefined : 3).map((a) => abilitiesOf(m, a, row.dim));
+    const sources = team.filter((a) => brings(a) > 1e-9 || plainKeys(a.id, row.dim)).sort((a, b) => brings(b) - brings(a))
+      .slice(0, PLAIN.has(row.dim) ? undefined : 3);
+    const some = sources.map((a) => abilitiesOf(m, a, row.dim));
     const needs = bump(row.dim) >= 0.15 && !saidMap.con;
     if (needs) saidMap.con = true;
+    // (the sources end the first sentence, a list that may have an "and" or two, and the advice is a
+    // sentence of its own, after what the map needs on top)
+    const advice = needs ? `${where} needs more, so ${makeUp(row.dim)}.` : `${capital(makeUp(row.dim))}.`;
     // nobody means nobody: an ultimate that does it still brings some, in the rounds it's ready
     const ults = some.length || !PLAIN.has(row.dim) ? [] : team.filter((a) => fitOf(a.id, 'X', row.dim) === 'does').map((a) => owned(a, abilityNames(a.id, 'X')[0]!));
-    if (ults.length) cons.push(`${capital(info.has)} ${info.few ? 'come' : 'comes'} only from ${listJoin(ults)}, ${ults.length > 1 ? 'ultimates' : 'an ultimate'} most rounds don’t have${needs ? `. ${where} needs more` : ''}, so ${makeUp(row.dim)}.`);
+    if (ults.length) cons.push(`${capital(info.has)} ${info.few ? 'come' : 'comes'} only from ${listJoin(ults)}, ${ults.length > 1 ? 'ultimates' : 'an ultimate'} most rounds don’t have. ${advice}`);
     else if (!some.length) cons.push(`Nobody brings ${info.lacks}${needs ? `, which ${where} needs` : ''}, so ${makeUp(row.dim)}.`);
     else if (info.unnamed) cons.push(`The comp is light on ${info.lacks}${needs ? `, which ${where} needs` : ''}, so ${makeUp(row.dim)}.`);
     // three small sources aren't "only" anything: what they add up to is still a little
-    // (what the map needs on top is a sentence of its own, after a list that may have an "and" or two)
-    else if (some.length >= 3) cons.push(`${joinGroups(some)} bring only a ${info.few ? 'few' : 'little'} ${info.has}${needs ? `. ${where} needs more` : ''}, so ${makeUp(row.dim)}.`);
-    else cons.push(`${capital(info.has)} ${info.few ? 'come' : 'comes'} only from ${joinGroups(some)}${needs ? `. ${where} needs more` : ''}, so ${makeUp(row.dim)}.`);
+    else if (some.length >= 3) cons.push(`${joinGroups(some)} bring only a ${info.few ? 'few' : 'little'} ${info.has}. ${advice}`);
+    else cons.push(`${sourcesOf(row.dim, some, sources.map(brings))}. ${advice}`);
   }
   // a comp with no real gap still has a thinnest spot worth playing around
   if (!cons.length) {
@@ -498,12 +546,12 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     const there = thin && DIM_INFO[thin.dim].unnamed ? 0.6 : 0.3;
     const from = thin ? thin.by.filter((b) => b.value >= there && !viaIn(m, agentById(b.id)!, thin.dim).includes('G')) : [];
     if (thin && thin.cover < 0.8 && (thin.by[0]?.value ?? 0) >= PLAN_NOTE.brings && from.length) {
-      const info = DIM_INFO[thin.dim], lead = `${capital(info.has)} ${info.few ? 'come' : 'comes'} only from`;
+      const info = DIM_INFO[thin.dim];
       // a strength the name doesn't fit an ability to (Operator play) rests on the player, so it's
       // gone when they are; the others rest on the utility, so it's gone once that's used
       if (info.unnamed) {
-        const names = from.slice(0, 2).map((b) => agentById(b.id)!.name);
-        cons.push(`${lead} ${listJoin(names)}, so if ${names.length === 1 ? `${names[0]} goes` : 'they go'} down, ${makeUp(thin.dim)}.`);
+        const two = from.slice(0, 2), names = two.map((b) => agentById(b.id)!.name);
+        cons.push(`${sourcesOf(thin.dim, names, two.map((b) => b.value))}. If ${names.length === 1 ? `${names[0]} goes` : 'they go'} down, ${makeUp(thin.dim)}.`);
       } else {
         // "only" names everyone who brings any of it, as the other gaps do ("only Sova’s Shock Bolt"
         // is wrong with Phoenix’s Hot Hands in the comp), and for a plain strength everyone with an
@@ -515,8 +563,9 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
         if (!plain && named.length > 3) cons.push(`The comp is thinnest on ${info.lacks}, so ${makeUp(thin.dim)}.`);
         else {
           const abilities = named.map((a) => abilitiesOf(m, a, thin.dim));
-          const one = abilities.length === 1 && !abilities[0]!.includes(' and ');
-          cons.push(`${lead} ${joinGroups(abilities)}, so once ${one ? 'it’s' : 'they’re'} used, ${makeUp(thin.dim)}.`);
+          const one = abilities.length === 1 && !pluralIn(abilities[0]!);
+          const then = wordsFor(one ? ['Once it’s used', 'When it’s spent', 'After that'] : ['Once they’re used', 'When they’re spent', 'After those'], `${key}|${thin.dim}|then`);
+          cons.push(`${sourcesOf(thin.dim, abilities, named.map(brings))}. ${then}, ${makeUp(thin.dim)}.`);
         }
       }
     } else if (thin && thin.cover < 0.8 && (thin.by[0]?.value ?? 0) < PLAN_NOTE.brings) cons.push(`The comp is thinnest on ${DIM_INFO[thin.dim].lacks}, so ${makeUp(thin.dim)}.`);
@@ -551,8 +600,8 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     // (one of your mains you already know well, and one you're learning has its own line above; one
     // the player chose to play is their call, but they still hear what the rank gets out of it)
     hard = team.filter((a) => kitShare(a, 0) < KIT_NOTE.hard && !a.estimate && !mains.includes(a) && !learning.includes(a)).sort((x, y) => kit(x) - kit(y));
-    if (hard.length === 1) conAbout(`${hard[0]!.name} takes practice to play well, and at ${rankName} most players get only part of what the kit can do, so the pick pays off only if someone plays that agent often.`, hard);
-    else if (hard.length) conAbout(`${listJoin(hard.map(nameOf))} take practice to play well, and at ${rankName} most players get only part of what their kits can do, so they pay off only if someone plays them often.`, hard);
+    if (hard.length === 1) conAbout(`${hard[0]!.name} takes practice to play well. At ${rankName} most players get only part of what the kit can do, so the pick pays off only for someone who plays ${hard[0]!.name} often.`, hard);
+    else if (hard.length) conAbout(`${listJoin(hard.map(nameOf))} take practice to play well. At ${rankName} most players get only part of what their kits can do, so they pay off only for players who know them well.`, hard);
     const easy = team.filter((a) => m.solo[a.index]! >= 0.8 && !a.estimate && !alone.has(a.id));
     if (easy.length && t < KIT_NOTE.teamwork) pros.push(`${listJoin(easy.map(nameOf))} ${easy.length === 1 ? 'works' : 'work'} well without much teamwork, which suits ${rankName}.`);
   }
@@ -566,15 +615,30 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
   // all maps would mislead there, even where most of the gap is chance)
   const lostHere = (a: Agent) => { const [won, games] = (map && MAP_WINS[map.id]?.agents[a.id]) || [50, 0]; return won < 50 && games >= WIN_NOTE.games; };
   const winners = team.filter((a) => winOf(a) >= WIN_NOTE.more && !lostHere(a)), losers = team.filter((a) => winOf(a) <= -WIN_NOTE.fewer && pull(a) <= -WIN_NOTE.fewer && a.skill >= 0.55 && !chosen.has(a.id));
-  // the rate quoted is the one that counts most here: across all ranks, or Radiant's own where that's most of it
+  // the rate quoted is the one that counts most here: the rank's own as its answers count it
+  // (rankWinAt), or Radiant's own where that's most of it. Radiant's answers count the rate across all
+  // ranks apart from Radiant's own, so there it's quoted without a rank.
   const atTop = (a: Agent) => !!RADIANT[a.id] && Math.abs(m.fitParts.atTop[a.index]!) * 2 >= Math.abs(winOf(a));
-  const rateOf = (a: Agent) => (atTop(a) ? `${Math.round(RADIANT[a.id]![1])}% at Radiant` : `${Math.round(a.win)}%`);
-  const rates = (list: Agent[]) => (list.length === 1 ? `${rateOf(list[0]!)}${atTop(list[0]!) ? '' : ' of games'}` : listJoin(list.map((a) => `${a.name} ${rateOf(a)}`)));
-  if (winners.length) pros.push(`${listJoin(winners.map(nameOf))} ${winners.length === 1 ? 'wins' : 'win'} more ranked games than most agents (${rates(winners)}).`);
+  // the rank is named only where its own table has the agent: one picked too little there to be in it
+  // is counted at their rate across all ranks, so the line says no more than that, and quotes that
+  // rate as the agent's page and Help show it
+  const listed = (a: Agent) => s.rank !== 'radiant' && !!RANK_WINS[s.rank]?.agents[a.id];
+  const rateIn = (a: Agent) => Math.round(atTop(a) ? RADIANT[a.id]![1] : listed(a) ? rankWinAt(a, s.rank) : a.win);
+  const placeOf = (a: Agent) => (atTop(a) ? ' at Radiant' : listed(a) ? ` at ${rankName}` : '');
+  // "Phoenix wins 52% of ranked games at Immortal and Clove 53% at Radiant": the first rate in full,
+  // the others after their names, with their rank only where it isn't the first one's (rates across
+  // all ranks first, Radiant's own last, so a rate with no rank after it is never read as the rank's)
+  const rates = (list: Agent[], also = '') => {
+    const [first, ...rest] = [...list.filter((a) => !atTop(a) && !listed(a)), ...list.filter((a) => !atTop(a) && listed(a)), ...list.filter(atTop)];
+    const others = rest.map((a) => `${a.name} ${rateIn(a)}%${placeOf(a) === placeOf(first!) ? '' : placeOf(a)}`);
+    const full = `${first!.name} ${also}wins ${rateIn(first!)}% of ranked games${placeOf(first!)}`;
+    return others.length ? `${full}${others.length === 1 ? ' and ' : ', '}${listJoin(others)}` : full;
+  };
+  if (winners.length) pros.push(`${rates(winners)}, more than most agents.`);
   // agents the line before already says to pick only if someone plays them often just add their rate
-  if (losers.length && losers.every((a) => hard.includes(a))) conAbout(`${listJoin(losers.map(nameOf))} also ${losers.length === 1 ? 'wins' : 'win'} fewer ranked games than most agents (${rates(losers)}).`, losers);
+  if (losers.length && losers.every((a) => hard.includes(a))) conAbout(`${rates(losers, 'also ')}, less than most agents.`, losers);
   else if (losers.length) {
-    conAbout(`${listJoin(losers.map(nameOf))} ${losers.length === 1 ? 'wins' : 'win'} fewer ranked games than most agents (${rates(losers)}), so ${losers.length === 1 ? 'the pick is' : 'they’re'} best played by someone who knows ${losers.length === 1 ? 'that agent' : 'them'} well.`, losers);
+    conAbout(`${rates(losers)}, less than most agents, so ${losers.length === 1 ? 'the pick is' : 'they’re'} best played by someone who knows ${losers.length === 1 ? losers[0]!.name : 'them'} well.`, losers);
   }
   if (t >= 0.75) {
     // (not one that pros or players at the top pick here anyway: that agent's place is earned)
@@ -594,7 +658,7 @@ export function explainTeam(m: Model, ids: readonly string[], who: ExplainFor = 
     notes.push(`${names} ${theirs.length === 1 ? 'is' : 'are'} here as a random teammate’s likely pick. Leaving an agent out rules out only ${who.party.length === 1 ? 'your own pick' : 'your party’s picks'}.`);
   }
   for (const a of team.filter((x) => x.estimate)) notes.push(`${a.name} is new, so this comp’s fit is an early estimate and will change once there’s more play to go on.`);
-  const { plan, parts: planParts } = planOf(m, strengths);
+  const { plan, parts: planParts } = planOf(m, strengths, key);
   if (mine.length) {
     // a party hears about its own agents first; what a random or locked teammate's kit does here is
     // theirs to deal with, so those cons go
@@ -636,7 +700,7 @@ export const PHASES: Record<'take' | 'plant' | 'hold' | 'retake', Partial<Record
   },
   plant: { postplant: 'stops the defuse', stall: 'slows the retake', anchor: 'holds the planted Spike', flank: 'watches the flank' },
   hold: {
-    anchor: 'holds a site alone', stall: 'slows pushes', recon: 'spots pushes early', angles: 'holds the long angles',
+    anchor: 'holds a site alone', stall: 'slows pushes', recon: 'spots the attackers early', angles: 'holds the long angles',
     disrupt: 'stops pushes', wall: 'cuts off the long sightlines', smoke: 'smokes off the way in', flank: 'watches the flank', duel: 'wins fights',
   },
   retake: { retake: 'leads the retake', flash: 'flashes back onto the site', clear: 'clears the planted site', mobility: 'rotates fast', sustain: 'keeps the team in the fight' },
@@ -645,10 +709,16 @@ export const PHASES: Record<'take' | 'plant' | 'hold' | 'retake', Partial<Record
 /** What an agent with a heal of their own does with it: "Reyna stays in the fight with Devour". */
 const SELF_HEAL = 'stays in the fight with';
 
+/** What a way out is for, after its name: "with Tailwind to get out after each shot". */
+const escapeWords = (p: PlanPart): string =>
+  p.dim === 'angles' ? 'to get out after each shot' : p.phase === 'plant' ? 'to get away from the retake' : 'to get out if the site falls';
+
 /**
  * One part of how a comp wins: the phase, the strength, who brings it and the ability that does
  * (none for gun play). `how` is set when the ability helps without doing it: the way out after an
- * Operator shot ('escape'), or a heal of the agent's own ('self').
+ * Operator shot ('escape'), or a heal of the agent's own ('self'). `heals` is set when the ability
+ * that wins the fights is also a heal of the agent's own, so they stay in the fights they win
+ * (Reyna's Devour).
  */
 export interface PlanPart {
   phase: keyof typeof PHASES;
@@ -656,46 +726,118 @@ export interface PlanPart {
   agent: string;
   ability?: string;
   how?: 'escape' | 'self';
+  heals?: boolean;
 }
 
-/**
- * A part in words, after the agent's name: "takes space with Tailwind", "picks from long range with
- * Tailwind to get away", "stays in the fight with Devour", or for gun play "wins the gunfights".
- */
-const planWords = (p: PlanPart): string =>
-  p.ability && p.how === 'self' ? `${SELF_HEAL} ${p.ability}`
-  : p.ability ? `${PHASES[p.phase][p.dim]!} with ${p.ability}${p.how === 'escape' ? ' to get away' : ''}`
-  : p.dim === 'duel' ? 'wins the gunfights' : PHASES[p.phase][p.dim]!;
+/** A verb phrase after "can" or a plural: "takes space" is "take space", "watches the flank" is "watch the flank". */
+const baseVerb = (v: string): string => {
+  const [w, ...rest] = v.split(' ');
+  return [/(?:ch|sh|x|ss)es$/.test(w!) ? w!.slice(0, -2) : w!.replace(/s$/, ''), ...rest].join(' ');
+};
 
 /**
- * Parts in a sentence, each agent named once with all they do ("Jett takes space with Tailwind and
- * wins fights with Blade Storm"), the agents in the order they first come up.
+ * A part in words, after the agent's name: "takes space with Tailwind", "picks from long range, with
+ * Tailwind to get out after each shot", "stays in the fight with Devour", or for gun play "wins the
+ * gunfights". After "can" (`can`) the verb is plain ("take space"), and after a part with the same
+ * verb (`same`) it's left out, so "holds a site alone with Trademark and the long angles" says
+ * "holds" once.
  */
-function partsSentence(parts: readonly PlanPart[]): string {
-  const groups: { agent: string; words: string[] }[] = [];
+const planWords = (p: PlanPart, can = false, same = false): string => {
+  const verb = PHASES[p.phase][p.dim]!;
+  const v = same ? verb.slice(verb.indexOf(' ') + 1) : can ? baseVerb(verb) : verb;
+  if (p.ability && p.how === 'self') return `${can ? 'stay in the fight with' : SELF_HEAL} ${p.ability}`;
+  if (p.ability && p.how === 'escape') return `${v}, with ${p.ability} ${escapeWords(p)}`;
+  if (p.ability && p.heals) return `${v} and ${can ? 'stay' : 'stays'} in them with ${p.ability}`;
+  if (p.ability) return `${v} with ${p.ability}`;
+  return p.dim === 'duel' ? (can ? 'win the gunfights' : 'wins the gunfights') : v;
+};
+
+/** The first word of what a part says, to tell when two parts of one agent share a verb. */
+const verbOf = (p: PlanPart): string => (p.ability && p.how === 'self' ? 'stays' : PHASES[p.phase][p.dim]!.split(' ')[0]!);
+
+/** An agent and all they do in a phase: "Jett takes space with Tailwind and wins fights with Blade Storm". */
+function clauseOf(g: readonly PlanPart[], can = false): string {
+  const words = g.map((p, i) => planWords(p, can, i > 0 && verbOf(p) === verbOf(g[i - 1]!) && !g[i - 1]!.how));
+  return `${agentById(g[0]!.agent)!.name} ${can ? 'can ' : ''}${listJoin(words)}`;
+}
+
+/** Strengths a plan can name the ability first for ("Sova’s Recon Bolt finds the defenders"), by phase. */
+const LEADS_WITH: Record<keyof typeof PHASES, readonly Dim[]> = {
+  take: ['smoke', 'wall', 'flash', 'recon', 'entry', 'clear', 'disrupt'],
+  plant: ['postplant', 'stall', 'flank'],
+  hold: ['anchor', 'stall', 'recon', 'disrupt', 'wall', 'smoke', 'flank'],
+  retake: ['retake', 'clear', 'sustain'],
+};
+
+/**
+ * A part said ability first, "Sova’s Recon Bolt finds the defenders", where that reads well: an
+ * ability that does the job itself, and whose name doesn't echo the verb ("Sky Smoke smokes").
+ */
+function abilityFirst(p: PlanPart): string | undefined {
+  if (!p.ability || p.how || p.heals || !LEADS_WITH[p.phase].includes(p.dim)) return undefined;
+  const verb = PHASES[p.phase][p.dim]!;
+  if (p.ability.toLowerCase().includes(verb.slice(0, 4))) return undefined;
+  return `${owned(agentById(p.agent)!, p.ability)} ${PLURAL_ABILITIES.has(p.ability) ? baseVerb(verb) : verb}`;
+}
+
+/** What sets up a fight on attack, and what a team does once it's set up (see phaseSentence). */
+const SETS_UP: readonly Dim[] = ['smoke', 'wall', 'flash', 'recon', 'disrupt'];
+const PAYS_OFF: readonly Dim[] = ['entry', 'duel'];
+
+/**
+ * Parts in a sentence, each agent named once with all they do. The sentence takes one of a few
+ * shapes, the same one every time for the same comp (`key`): a list ("Omen smokes off angles with
+ * Dark Cover and Sova finds the defenders with Recon Bolt"), two parts at once ("… while …"), or on
+ * attack, the utility that sets up a fight and then who takes it ("…, so Neon can take space with
+ * High Gear"). A part may name the ability first.
+ */
+function phaseSentence(parts: readonly PlanPart[], key: string): string {
+  const groups: PlanPart[][] = [];
   for (const p of parts) {
-    const g = groups.find((x) => x.agent === p.agent);
-    if (g) g.words.push(planWords(p));
-    else groups.push({ agent: p.agent, words: [planWords(p)] });
+    const g = groups.find((x) => x[0]!.agent === p.agent);
+    if (g) g.push(p);
+    else groups.push([p]);
   }
-  const clauses = groups.map((g) => `${agentById(g.agent)!.name} ${listJoin(g.words)}`);
-  // clauses that have an "and" of their own are kept apart by a comma
-  if (clauses.length === 2 && groups.some((g) => g.words.length > 1)) return `${clauses[0]}, and ${clauses[1]}`;
-  return listJoin(clauses);
+  // a way out ("…, with Tailwind to get out after each shot") ends its agent's part, and the sentence
+  const out = (g: readonly PlanPart[]) => Number(g.some((p) => p.how === 'escape'));
+  for (const g of groups) g.sort((a, b) => Number(a.how === 'escape') - Number(b.how === 'escape'));
+  groups.sort((a, b) => out(a) - out(b));
+  const say = (g: readonly PlanPart[], i: number): string => {
+    const first = g.length === 1 ? abilityFirst(g[0]!) : undefined;
+    return first && pickFor([true, false, false], `${key}|${i}|first`) ? first : clauseOf(g);
+  };
+  const single = groups.every((g) => g.length === 1);
+  const payoff = parts[0]!.phase === 'take' && single ? groups.findIndex((g) => PAYS_OFF.includes(g[0]!.dim)) : -1;
+  const shapes: ('list' | 'so' | 'while')[] = ['list'];
+  if (payoff >= 0 && groups.length >= 2 && groups.every((g, i) => i === payoff || SETS_UP.includes(g[0]!.dim))) shapes.push('so', 'so');
+  // (two jobs done at once, then the fights: "Killjoy holds a site alone … while Sage slows pushes …, and Reyna wins fights",
+  // with a way out still last)
+  const pays = (g: readonly PlanPart[]) => PAYS_OFF.includes(g[0]!.dim);
+  const together = [...groups.filter((g) => !pays(g) && !out(g)), ...groups.filter(pays), ...groups.filter((g) => !pays(g) && out(g))];
+  if (single && together.length >= 2 && !pays(together[1]!)) shapes.push('while');
+  const shape = pickFor(shapes, `${key}|shape`);
+  if (shape === 'so') {
+    const rest = groups.filter((_, i) => i !== payoff);
+    return `${joinGroups(rest.map(say))}, so ${clauseOf(groups[payoff]!, true)}`;
+  }
+  if (shape === 'while') return `${say(together[0]!, 0)} while ${say(together[1]!, 1)}${together[2] ? `, and ${say(together[2], 2)}` : ''}`;
+  // clauses that have an "and" of their own are kept apart by commas
+  return joinGroups(groups.map(say));
 }
 
 /**
  * How a comp wins, in a sentence or two: the strengths the situation needs that the comp covers
  * best, by phase of the round, each said as what the agent who brings most of it does, with the
  * ability. It reads off the same strengths as the score, and never names one the comp is short of
- * (see PLAN_NOTE).
+ * (see PLAN_NOTE). A third part before the plant or retake is named only when it counts nearly as
+ * much as the second.
  */
-function planOf(m: Model, strengths: readonly StrengthRow[]): { plan: string; parts: PlanPart[] } {
+function planOf(m: Model, strengths: readonly StrengthRow[], key: string): { plan: string; parts: PlanPart[] } {
   const named = new Set<string>();
   const all: PlanPart[] = [];
   const phase = (which: keyof typeof PHASES, most: number): PlanPart[] => {
     const verbs = PHASES[which];
-    const out: PlanPart[] = [];
+    const out: { part: PlanPart; size: number; named: string }[] = [];
     const rows = strengths.filter((r) => verbs[r.dim] && r.need >= PLAN_NOTE.need && r.cover >= PLAN_NOTE.cover && (r.by[0]?.value ?? 0) >= PLAN_NOTE.brings);
     for (const r of [...rows].sort((a, b) => b.need * b.cover - a.need * a.cover)) {
       if (out.length >= most) break;
@@ -704,22 +846,27 @@ function planOf(m: Model, strengths: readonly StrengthRow[]): { plan: string; pa
       const keys = keysIn(m, a, r.dim).replaceAll('G', '');
       const ability = r.dim === 'duel' && keys[0] === 'X' ? undefined : abilityNames(a.id, keys)[0];
       const how = ability ? fitOf(a.id, keys[0]!, r.dim) : undefined;
-      const key = `${a.id}|${ability ?? r.dim}`;
-      if (named.has(key)) continue;
-      named.add(key);
-      out.push({ phase: which, dim: r.dim, agent: a.id, ...(ability ? { ability } : {}), ...(how === 'escape' || how === 'self' ? { how } : {}) });
+      const heals = r.dim === 'duel' && !!ability && fitOf(a.id, keys[0]!, 'sustain') === 'self';
+      const id = `${a.id}|${ability ?? r.dim}`;
+      if (named.has(id)) continue;
+      named.add(id);
+      const part: PlanPart = { phase: which, dim: r.dim, agent: a.id, ...(ability ? { ability } : {}), ...(how === 'escape' || how === 'self' ? { how } : {}), ...(heals ? { heals } : {}) };
+      out.push({ part, size: r.need * r.cover, named: id });
     }
-    all.push(...out);
-    return out;
+    // a third part that counts well below the second would only make the list longer
+    while (out.length > 2 && out.at(-1)!.size < PLAN_NOTE.third * out[1]!.size) named.delete(out.pop()!.named);
+    const parts = out.map((x) => x.part);
+    all.push(...parts);
+    return parts;
   };
-  const sentences = (main: PlanPart[], after: PlanPart[], then: string, lead = ''): string[] => {
+  const sentences = (main: PlanPart[], after: PlanPart[], then: readonly string[], lead = ''): string[] => {
     const out: string[] = [];
-    if (main.length) out.push(`${lead}${partsSentence(main)}.`);
-    if (after.length) out.push(`${then}, ${partsSentence(after)}.`);
+    if (main.length) out.push(`${lead}${phaseSentence(main, `${key}|${main[0]!.phase}`)}.`);
+    if (after.length) out.push(`${pickFor(then, `${key}|${after[0]!.phase}|then`)}, ${phaseSentence(after, `${key}|${after[0]!.phase}`)}.`);
     return out;
   };
-  const attack = (lead?: string) => sentences(phase('take', PLAN_NOTE.most), phase('plant', 1), 'After the plant', lead);
-  const defense = (lead?: string) => sentences(phase('hold', PLAN_NOTE.most), phase('retake', 1), 'If a site falls', lead);
+  const attack = (lead?: string) => sentences(phase('take', PLAN_NOTE.most), phase('plant', 1), ['After the plant', 'Once the Spike is down', 'With the Spike down'], lead);
+  const defense = (lead?: string) => sentences(phase('hold', PLAN_NOTE.most), phase('retake', 1), ['If a site falls', 'When a site is lost', 'If the attackers take a site'], lead);
   const side = m.situation.side;
   const out = side === 'attack' ? attack() : side === 'defense' ? defense() : [...attack('On attack, '), ...defense('On defense, ')];
   return { plan: out.join(' '), parts: all };
@@ -779,7 +926,7 @@ export function belowParts(m: Model, best: readonly string[], other: readonly st
   const ranked = sum(m.fitParts.ranked, ins) - sum(m.fitParts.ranked, outs);
   if (Math.abs(ranked) >= BELOW_NOTE.part) {
     const who = ranked < 0 ? outs : ins;
-    parts.push({ key: 'ranked', size: ranked, words: `Players at Radiant pick ${names(who)} more in ranked` });
+    parts.push({ key: 'ranked', size: ranked, words: `Players at ${rankName} pick ${names(who)} more in ranked` });
   }
   const win = sum(m.fitParts.win, ins) - sum(m.fitParts.win, outs);
   if (Math.abs(win) >= BELOW_NOTE.part) {

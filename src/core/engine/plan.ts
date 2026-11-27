@@ -8,7 +8,7 @@ import { rankOf } from '../kb/ranks.ts';
 import { ROLE_IDS } from '../kb/roles.ts';
 import { clamp } from '../util.ts';
 import { forgetModels, modelFor, situationKey, type Model, type Situation } from './model.ts';
-import { askFor, searchParties, type PartyRules } from './party.ts';
+import { askFor, ownSmokes, searchParties, type PartyRules } from './party.ts';
 import type { Comfort, Query } from './query.ts';
 import { anyRoles, scoreTeam, searchTeams, type Rules } from './search.ts';
 import { agentUnsure, type Unsure } from './sure.ts';
@@ -249,10 +249,15 @@ export function solve(q: Query, s0: Situation, keep: number): SituationAnswer {
 /** The numbers an answer was scored with: its situation's, with how well the party plays its agents. */
 export const answerModel = (a: Pick<SituationAnswer, 'situation' | 'comfort'>): Model => modelForQuery(a, a.situation);
 
-/** The fit of one given team (agent ids) in a situation, as the answers would show it (with how well the party plays its agents, when given). */
-export function teamFit(s: Situation, ids: readonly string[], newAgents: boolean, comfort: Readonly<Record<string, Comfort>> = {}): { fit: number; tier: string } {
+/**
+ * The fit of one given team (agent ids) in a situation, as the answers would show it: with how well
+ * the party plays its agents, when given, and for a solo player, duo or trio (`s.party`) with which
+ * of the team are the party's own (`party`), as a party's row says the whole team fits.
+ */
+export function teamFit(s: Situation, ids: readonly string[], newAgents: boolean, comfort: Readonly<Record<string, Comfort>> = {}, party: readonly string[] = []): { fit: number; tier: string } {
   const m = modelForQuery({ comfort }, s);
   const team = ids.filter((id) => agentById(id)).map(index);
-  const fit = fitOf(scoreTeam(m, team), referenceFor(modelFor(s), newAgents));
+  const own = s.party && s.party !== 5 ? ownSmokes(m, party.filter((id) => ids.includes(id) && agentById(id)).map(index)) : 0;
+  const fit = fitOf(scoreTeam(m, team) + own, referenceFor(modelFor(s), newAgents));
   return { fit, tier: tierOf(fit) };
 }

@@ -3,7 +3,7 @@
  * choose (the pros' usual comp to start with, the best comp at your rank, or one you saved), with
  * the plays you drew among them.
  */
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { PageHead } from '../shell.tsx';
 import { Button, Empty, Segmented, Select } from '../components/controls.tsx';
 import { Icon } from '../icons.tsx';
@@ -12,7 +12,7 @@ import { answerFor } from '../solved.ts';
 import { drawLink, useMyPlays } from '../myplays.ts';
 import { planWith } from '../planner/store.ts';
 import { TeamIcons } from '../planner/comp.tsx';
-import { PlayCard, PlayRows } from '../planner/plays.tsx';
+import { cardIntoView, PlayCard, PlayRows, refocus } from '../planner/plays.tsx';
 import { rankWord } from '../planner/words.ts';
 import { agentById } from '../../core/kb/agents.ts';
 import type { MapInfo, Side, SiteId } from '../../core/kb/maps.ts';
@@ -29,6 +29,7 @@ const names = (team: readonly string[]) => listJoin(team.map((id) => agentById(i
 
 export function MapPlaysPage({ m, open }: { m: MapInfo; open: string }) {
   const s = useSettings();
+  const browse = useRef<HTMLDivElement>(null);
   const rank = s.defaultRank as RankId;
   const [side, setSide] = useView<Side>('maps.side', 'attack', (v) => v === 'attack' || v === 'defense');
   const [site, setSite] = useState<SiteId | 'all'>('all');
@@ -56,6 +57,7 @@ export function MapPlaysPage({ m, open }: { m: MapInfo; open: string }) {
   const shown = site === 'all' ? all : all.filter((f) => !isRoundPlay(f.play.kind));
   const chosen = shown.find((f) => f.play.id === pick) ?? shown[0];
   const groups = SIDE_KINDS[side].map((k) => [k, shown.filter((f) => f.play.kind === k)] as const).filter(([, fs]) => fs.length > 0);
+  const flat = groups.flatMap(([, fs]) => fs);
   const where = (f: FilledPlay['play']) => (f.site ? `${f.site} site` : 'Whole map');
   return (
     <>
@@ -79,19 +81,19 @@ export function MapPlaysPage({ m, open }: { m: MapInfo; open: string }) {
       {!shown.length ? (
         <Empty title={`No plays for ${site === 'all' ? 'this side' : `${site} site`} yet`} actions={<Button icon="draw" onClick={() => go('maps', drawLink(m.id))}>Draw a play</Button>}>Draw one on the map, and it’s kept with your plans.</Empty>
       ) : (
-        <div class="plays-browse">
+        <div class="plays-browse" ref={browse}>
           <nav class="stack plays-index" aria-label={`Plays on ${m.name}`}>
             {groups.map(([k, fs]) => (
               <section key={k} class="stack">
                 <h2 class="play-group" id={`kind-${k}`}>{kindsName(k)}</h2>
                 <div class="play-list" role="listbox" aria-labelledby={`kind-${k}`}>
-                  <PlayRows plays={fs} chosen={chosen} onPick={(i) => setPick(fs[i]!.play.id)} label={where} />
+                  <PlayRows plays={fs} chosen={chosen} onPick={(i, key) => { setPick(fs[i]!.play.id); cardIntoView(browse.current, key); }} label={where} />
                 </div>
               </section>
             ))}
             <p class="small muted">{mine.length ? `${mine.length === 1 ? 'One play is' : `${mine.length} plays are`} yours, kept with your plans.` : 'Plays you draw are listed here too.'}</p>
           </nav>
-          {chosen && <PlayCard f={chosen} rank={rank} key={`${chosen.play.id}|${team.join()}`} />}
+          {chosen && <PlayCard f={chosen} rank={rank} key={`${chosen.play.id}|${team.join()}`} nav={{ at: flat.indexOf(chosen), of: flat.length, go: (i, from) => { setPick(flat[i]!.play.id); refocus(browse.current, from); } }} />}
         </div>
       )}
     </>

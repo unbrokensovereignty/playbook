@@ -7,8 +7,10 @@
 import { isAgent } from './kb/agents.ts';
 import { mapById, type Side, type SiteId } from './kb/maps.ts';
 import { isMoment, JOBS, SIDE_KINDS, stepOf, type Job, type Moment, type Play, type PlayKind } from './kb/plays.ts';
-import { sanitizeComfort, sanitizeQuery, type Comfort, type Query } from './engine/query.ts';
-import { clean } from './text.ts';
+import { sanitizeComfort, sanitizeQuery, type Comfort, type PartySize, type Query } from './engine/query.ts';
+import type { Situation } from './engine/model.ts';
+import type { RankId } from './kb/ranks.ts';
+import { clean, cut } from './text.ts';
 import { isRecord } from './util.ts';
 
 export const LIMITS = { name: 60, note: 600, plans: 500, parties: 50, players: 5, pool: 30, plays: 100, games: 1000, gameNote: 200, steps: 8, route: 10, line: 200 };
@@ -20,6 +22,8 @@ export interface SavedPlan {
   query: Query;
   /** The comp picked from the answers, as agent ids (empty when none was picked). */
   team: string[];
+  /** For a solo player, a duo or a trio, the agents in `team` that are the party's own (empty for a five-stack). */
+  party: string[];
   starred: boolean;
   created: number;
   updated: number;
@@ -88,24 +92,37 @@ export interface MyStep {
 /** One job for each of five players, at most. */
 export const PLAY_JOBS = 5;
 
-const text = (v: unknown, max: number): string => clean(typeof v === 'string' ? v : '').slice(0, max);
-const time = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback);
+const text = (v: unknown, max: number): string => cut(clean(typeof v === 'string' ? v : ''), max);
+/** A time in ms, or `fallback` for none: up to the year 2200, as day keys are, so a date always reads. */
+const time = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= Date.UTC(2200, 0, 1) ? v : fallback);
 const goodId = (v: unknown): v is string => typeof v === 'string' && /^[a-z]{1,3}_[a-z0-9]{4,24}$/.test(v);
 const agents = (v: unknown, max: number): string[] => (Array.isArray(v) ? [...new Set(v.filter(isAgent))].slice(0, max) : []);
 
 export function sanitizePlan(x: unknown, now = 0): SavedPlan | null {
   if (!isRecord(x) || !goodId(x.id)) return null;
   const query = sanitizeQuery(x.query);
+  const team = agents(x.team, 5);
   return {
     id: x.id,
     name: text(x.name, LIMITS.name) || 'Saved plan',
     note: text(x.note, LIMITS.note),
     query,
-    team: agents(x.team, 5),
+    team,
+    party: query.party === 5 ? [] : agents(x.party, 5).filter((id) => team.includes(id)).slice(0, query.party),
     starred: x.starred === true,
     created: time(x.created, now),
     updated: time(x.updated, time(x.created, now)),
   };
+}
+
+/**
+ * The one situation a saved plan is about, as the Planner answered it: a plan saved from "the best
+ * side" or "the best rank" covers both sides, or `rank` (your usual one), and a solo player's, duo's
+ * or trio's plan keeps its size, which sets how much its team plays together.
+ */
+export function planSituation(p: SavedPlan, rank: RankId): Situation {
+  const q = p.query;
+  return { map: q.map === 'best' ? 'any' : q.map, side: q.side === 'best' ? 'both' : q.side, rank: q.rank === 'best' ? rank : q.rank, sites: q.sites, enemy: q.enemy, ...(q.party === 5 ? {} : { party: q.party }) };
 }
 
 export function sanitizeParty(x: unknown, now = 0): Party | null {
@@ -222,6 +239,10 @@ export function asPlay(p: MyPlay): Play {
   };
 }
 
+/** How many of you a saved party is, as the planner takes it. */
+export const partySize = (p: Party): PartySize => (p.players.length === 2 ? 2 : p.players.length === 3 ? 3 : 5);
+/** A saved party's part of a planner question: how many of you, the agents each player plays and how well (everywhere a party is planned for). */
+export const partyQuery = (p: Party): Pick<Query, 'party' | 'pools' | 'comfort'> => ({ party: partySize(p), pools: poolsOf(p), comfort: comfortOf(p) });
 /** A party's agent pools in player order, as the planner takes them. */
 export const poolsOf = (p: Party): string[][] => p.players.map((x) => [...x.agents]);
 /** How well a party plays its agents, as the planner takes it: an agent two players play counts as the better one plays it. */

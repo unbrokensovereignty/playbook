@@ -2,6 +2,90 @@
 
 What changed in each version of Playbook.
 
+## 0.6.0 (2026-11-26)
+
+- Things that come and go many times a session now change at once: moving between pages, opening Search with Ctrl K, folding the sidebar, switching tabs and opening a comp or a play. Messages slide back down the way they came when they go, and a deleted plan, party, play or game fades while the rows under it close the gap.
+- With motion set to Reduced, fades are as quick as they are at Full, and a setting you jump to from Search is still highlighted. Pages, Search, tabs and comps change at once, just as they do at Full, and only dialogs, menus and messages fade in.
+- After you delete a plan, party, play or game from the keyboard, focus moves to the next control in the list, so Tab carries on from there. Parties and plays close the gap without a jump at the end.
+- On a 1280 pixel wide screen, the Planner's answers sit beside the question again, so the first comp shows without scrolling.
+- The red Delete and Erase buttons in light themes have light text, and a confirm for something you'd delete shows its warning in red.
+- Agent cards show three lines of their summary and the Maps page lists each map's sites, so fewer cards end in a cut-off sentence. The fit bars on a comp and an agent's strengths stay one colour, the Agents role filter is no wider than its buttons, and long saved plan names on Home end in an ellipsis.
+- Zooming a minimap with a trackpad follows your fingers, a pinch zooms the way the browser does, and a scroll that passes over a map keeps scrolling the page. Panning a zoomed map is smoother.
+- Pause stops a replay where it is, and Go on carries on from that spot.
+- A saved plan you pick from far down the list opens in view, and on a wide screen it stays in view beside the list.
+- A long word in a party, play or theme name wraps instead of pushing the row's buttons off the page. Home shows your five newest parties.
+- The High contrast theme draws its lines and shading clearly, and text fields, selects and switches have edges you can see in every theme. In dark themes the chosen option of a switch like Attack, Defense or Both is outlined.
+- The NEW tag fits small agent portraits at every text size.
+- The arrow keys move between tabs, and screen readers hear each player's agents in a saved party.
+- A backup keeps to the limits of 500 plans and 50 parties, keeping the newest.
+- Text across the app keeps to five sizes, so cards and tables read evenly, and the tabs inside a comp sit a step below the tabs over the answers.
+- A saved name cut to fit never ends in half an emoji, and the name a new plan suggests is never cut part way through a word.
+- The minus and plus buttons on a number field show a clear ring when they have focus.
+- A menu that opens upward or to the left grows from the button that opened it. Routes on a minimap brighten as quickly as you move down the steps, and fit bars settle sooner.
+- Agent cards and map tiles give a little when pressed. Moving between icons in the narrow sidebar swaps their tooltips with no fade.
+- A new page opens at the top at once, with no glide from where you'd scrolled to, and an agent or map opened from far down its list starts at the top too. Moving focus with Tab scrolls at once.
+- Deleting your newest game, or putting away an offer on Home, closes the gap without a jump at the end.
+- On a 1280 pixel wide screen, each comp in the Planner shows its whole team and more of what sets it apart, and a map's page puts its summary and sites beside the map.
+- When two messages are showing and the lower one goes, the upper one moves down smoothly. Menus show their whole entrance, growing from the button that opened them.
+- Dropdowns draw the same thin arrow as the other pickers, and map titles on Home line up in every row.
+- With motion Off, a setting you jump to from Search is still highlighted.
+- A saved plan you pick from far down the list opens with its name in view, and focus moves into it, so Tab carries on to Rename and the note.
+- Scrolling a saved plan past its Plays map keeps scrolling. The end of a trackpad zoom-out stays on the map, and a pinch over a map never zooms the whole page.
+- With motion Reduced or Off, a replay gives each moment as long as it does at Full.
+- A switch that's off shows its knob clearly in every theme, and the steps a paused replay hasn't reached yet stay easy to read.
+- Restoring a backup says how many of the oldest plans or parties Merge or Replace would leave out to keep to the limits, and counts everything the file holds.
+- On a 1280 pixel screen, a map's plays page shows the list and the picked play side by side, and where they're stacked, picking a play brings its map into view.
+- Screen readers hear each comp's fit at every width, and with fit numbers turned off the bar still shows.
+- The Side and Party switches in the Planner fit one row at Extra large text, and Copy and Print on a saved plan line up with its tabs.
+- Small print, settings dropdowns, theme tiles, play group headings and the results in Your games all line up more evenly. The empty Parties tab matches the others, Search keeps its hints at the bottom, Help's guide keeps to a comfortable line length, and a map on a tall screen has no gap beside it.
+- A guided tour stays lit as it moves between steps on the same page. Clicks made while a theme or accent colour fades in still land, so you can try colours one after another.
+- The sidebar's links stay put as the question card's summary grows or shrinks. A setting opened from another page opens right where it is.
+- A new message moves the ones above it up smoothly, and Undo swaps its message for the next one in place. The tour offer on Home no longer rises in on every visit, and putting away the setup offer swaps in the tour offer without a jump.
+- The Planner, Agent select and the pages that rank many situations at once (an agent's best maps, a map's best comps, Rankings by map) work out their answers in the background, so the page keeps responding to clicks and scrolling, even on a slower computer.
+- A message stays up while it has keyboard focus, as it does under the pointer, and the end of a long trackpad zoom-out stays on the map.
+- Three new sound sets take the place of Desk, Chimes and Kalimba. Clarity, the new default, plays soft, rounded sine tones from SND's Sine pack, with crisp little clicks from JC Sounds for taps, ticks and switches. Felt plays short, warm piano notes from SND's Piano pack, and lets a ready plan or a save ring on for a moment. Beacon plays HaelDB's alert tones, which are fuller and ring for most of a second, even on a click. If you'd chosen one of the old sets, Playbook moves you to Clarity.
+- Every set is made of recordings built into the file, so sound still works with no connection. Where a cue has more than one recording, it picks one at random and never plays the same one twice in a row. A new sound set plays its sample the moment you pick it.
+- Choosing an agent on Agent select or in an agent picker plays a sound of its own, and taking one out plays a softer one.
+- A plan that finishes while Playbook's tab is in the background stays quiet, and turning Sound effects on now clicks. Shuffle, New game and a teammate's Remove play one sound instead of two.
+- After Erase everything, Playbook asks how you play again.
+- Agent select's box has focus whenever the page opens, from the sidebar, Search or Your games.
+- Adding a play from a code plays the saved sound and offers Undo. At the 100-play limit the message is shown in red, with the error sound.
+- A saved plan for a solo player, a duo or a trio now shows the same fit, pros, cons and tips the Planner gave it, with your own agents first. Copy and Print mark your agents and name the best picks for your random teammates. Planning for a party from Search counts its mains and the agents it's still learning, as Saved does.
+- Changing the party size, or picking a saved party, says which must-plays, locked teammates or role counts no longer fit. On Saved and Home, a locked-in teammate is marked as locked in. Changing Comps to show updates the answer already on screen.
+- When locked-in teammates leave one random teammate, Copy, Print and the party box speak of that one teammate, with their best pick and the role to ask them for. The line under a question names the teammates locked in, wherever it appears.
+- Help → Solo, duos and trios explains that a saved party plan shows how the whole team fits, so its number can differ from the row's.
+- With **Show fit scores as numbers** off, the party box under a solo, duo or trio's comp names each fit by its tier ("the team is tier S"), and so do Why not on the Agents tab, Compare, Copy and Print. What an agent adds over the next best of their role is said without points, and the tier list's tooltips on Rankings leave the fit out. A fit marked less sure says why, without how many points it could be off by.
+- Copy and Print carry the play the Plays tab lists first, including a play you drew, even before you open the tab. Copying a plan with a drawn play that has no note goes straight on to its steps, and a long unbroken word in a drawn play wraps inside its card.
+- Searching for "How well you play them" before choosing agents goes to Agents you play. Rankings → Agents by map says "Every map in the pool" until All maps is on.
+- Clearing recent questions on Home can be undone.
+- The arrow keys, Home and End move along a row of choices like Side, and through the play, map and situation lists.
+- Offers in Saved → Your games to mark an agent as a main or as still learning count only games you won or lost, not draws. Each has a **Not now** button, which puts the offer away until your record with that agent changes, and Undo brings it straight back. Taking an offer plays its sound with the click.
+- The Planner's answers dim and say they're updating only when an answer takes a moment, so a quick change no longer makes them blink. Rankings' table of every map changes once, when all the maps are in, and changing side or rank there keeps the page responsive. A tour step below the fold opens on its target, and Agent select shows a pick you've seen before straight away.
+- An open comp shows its whole team and what sets it apart. Play names line up in a comp's Plays tab and fit one line beside the map, game counts in Your games no longer break, and "How it wins" keeps to a readable width on a wide screen. Pressing Enter on the saved plan that's already open brings it back into view, and restoring a backup over the limits says everything a merge leaves out.
+- Opening a comp or an agent below the open one keeps it where you clicked, where before the closing one above pulled it off screen. A tour step that moves to another page no longer shows its card in the middle of the window on the way.
+- A play you're drawing that's back where it started, with its name cleared or every change undone, closes without asking, and Cancel leaves it at once.
+- Back and Forward no longer close a dialog that holds what you're typing or choosing. That covers the first-launch setup, naming or renaming a plan, adding a play or theme from a code, and choosing agents. What you entered is still there when you come back to it, and Esc still closes it. A question such as a delete confirm still goes, as if you'd cancelled it.
+- Double-clicking a word in a text box just after a dialog or menu closes selects it again.
+- Agent select stops showing its last pick as soon as a teammate locks in, and shows Finding your pick until the new one is ready. Before, a pick a teammate had just taken could stay up for a moment, and Won or Lost then logged that agent twice.
+- Changing the question while the Planner is still on a long answer, such as the best map for a duo, goes straight on to the new one without restarting the background work. On a slow computer, a burst of changes can no longer leave the Planner and Rankings working in the page itself until the tab is reloaded.
+- Picking a play in a comp's Plays tab brings its card up with the play's name over the map, and Previous play and Next play buttons step through the rest without scrolling back to the list. A pick made with the keyboard moves focus to the card. The same buttons are on a map's plays page, where the card now stays in view beside the list.
+- Holding Enter on a button that opens a confirm or a menu no longer goes on to press the dialog's button or the menu's first item, so a long press can't erase or delete by itself. Help's guide sits in balanced columns, callout names in a drawn route don't break across lines, and a draft stays with its own map.
+- Dialogs with a form, like first launch, a party, a theme and naming a plan, keep their buttons in view and scroll their questions on a short window. A double click or a held Enter on Delete, Undo or Remove step acts once. A removed step in Draw a play can be put back, and Ctrl Z there undoes the drawing first. Esc or a click outside no longer throws away a party you're editing, and Back or Forward closes a confirm left open.
+- In Draw a play, typing in a field counts as one change, the Undo on a removed step always brings that step back, and Ctrl Z and Ctrl Shift Z stay with the drawing. Picking a map after scrolling the map list no longer jumps to the map above, and a double click on a button that opens a dialog leaves it open.
+- While you draw a play, the sidebar's Undo and Redo work on the drawing, as Ctrl Z does, and a removed step's Undo never brings it back twice. A saved plan's note follows Undo and Redo. Holding Backspace in Agent select clears the name you typed and stops there. The same message no longer stacks up, and a drag on Draw a play's map no longer adds a spot.
+- A saved plan's note keeps every letter however fast you type. The Redo on an undo message brings back the change it names, even while you draw. A double click on a menu item, a Search result or a button that opens a menu acts once, and a pen or finger tap on Draw a play's map adds its spot.
+- Settings and Help → About say that a backup and Erase everything include the plays you drew and the games you logged, with their counts, and Search quotes only the start of a long pasted search.
+- Closing or reloading the tab while a play is half drawn asks first, as Cancel does. A double click that opens a page no longer lands on the page it opens, and holding Ctrl \ or / acts once.
+- Game content for patch 13.10: ability text, Corrode's reworked minimap and where you can walk on it, and refreshed map banners. Corrode now shows rotation times between its sites.
+- A comp's reasons read less alike from one comp to the next. How it wins names a third agent only when they add nearly as much as the second, and on attack it can say whose utility sets up the player who takes space. A con names who brings a strength in a sentence of its own, then says how to play around it. Winning fights alone, ranked win rates and a map that asks for more of something are put a few different ways. Jett and Chamber hold the long angles with Tailwind or Rendezvous as the way out after each shot, and Reyna wins her fights and stays in them with Devour.
+- Agent select says what a missing role costs in the same words as the Planner. On an agent's page, the partners pro teams played them with count each team that picked the agent, and the pro pick rate is a share of teams, so the two numbers agree. A few retake plays, two kit notes for Breeze, the ultimate tips for Sova and Tejo, and some Help and tour lines read more plainly.
+- Killjoy's tip about staying near her setups names Alarmbot and Turret, the two that switch off once she's more than 40 meters away. Nanoswarm has no such limit.
+- Summit counts long walls for more, for its three switch walls and narrow chokes, and its notes name Sage, whom pros played on more than half its maps at Champions.
+- Playing alone, in a duo or in a trio, what players at your own rank pick in ranked counts from Silver up. Before, only Radiant's picks counted, and only from Ascendant. Clove, picked far more often than Omen at every rank from Gold to Immortal, now fits a solo player at least as well as Omen on every map in the pool.
+- Ranked numbers are up to date with patch 13.10. Pick and win rates across all ranks come from metabot.gg and op.gg, and the agents picked most at each rank, with Radiant's picks and wins, from op.gg rank by rank. Clove's lead over the other controllers is smaller after her patch 13.09 changes, and Viper wins fewer ranked games than before. Hush now counts among the agents random teammates lock in, and she's in the five picked most at every rank.
+- Win rates on the seven maps in the pool add this patch's games to the ones read before, with each earlier game counting half, so an agent with few games on a map doesn't swing on a handful of results. Help → Guide says how the reads are put together.
+- From Iron to Immortal, each rank now counts its own ranked win rates, from op.gg's tables for that rank, for the twenty agents picked most there. A rank's rate counts only as far as it's more than chance, so an agent with few games at a rank stays close to their rate across all ranks. The hardest kits win fewer games low down: Neon's teams win about half their games at Silver and Gold, so her rate no longer pulls her into low-rank comps, and Hush's win fewer still at Iron. Clove wins a little more from Silver to Platinum than across all ranks, and Sage a little less at Iron. A comp's pros and cons quote the rate for your rank ("Phoenix wins 51% of ranked games at Gold"), and Help explains the rule under ranked results. An agent picked too rarely to be in your rank's table is quoted at their rate across all ranks, with no rank named.
+
 ## 0.5.5 (2026-11-13)
 
 The first public version of Playbook, an offline team comp planner for VALORANT that runs from a single HTML file.
